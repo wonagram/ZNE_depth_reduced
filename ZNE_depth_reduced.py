@@ -221,8 +221,8 @@ def applyU(qc, wires):
         qc.ry(theta_y6, wire)
         apply_noise(qc, wire, "y")
 
-        #qc.rz(theta_z6, wire)
-        #apply_noise(qc, wire, "z")
+        qc.rz(theta_z6, wire)
+        apply_noise(qc, wire, "z")
 
 
 def apply_correction(qc, c_pair, target):

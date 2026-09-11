@@ -195,7 +195,6 @@ def applyUdagger(qc, wire):
     qc.rx(-theta_x6, wire)
     apply_noise(qc, wire, "x", -overrotation_epsilon)
 
-
     qc.rz(-theta_z5, wire)
     apply_noise(qc, wire, "z", -overrotation_epsilon)
 
