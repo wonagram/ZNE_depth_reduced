@@ -8,17 +8,59 @@ from qiskit_aer.noise import (
 from qiskit.quantum_info import Operator
 from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2 as Sampler
 from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
-from mitiq.interface.mitiq_qiskit.qiskit_utils import initialized_depolarizing_noise
 from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
 import numpy as np
 
+
+USE_REAL_HARDWARE = False
+
 shots = 10**4
+
+# ============================================================
+# Depth of the unitary U
+# ============================================================
+
+DEPTH = 2
+
+# ============================================================
+# Number of foldings
+# ============================================================
+
+depth_folded_circuits = [1, 3, 5, 7, 9, 11]
+
+# ============================================================
+# Noise flags for a simulator
+# ============================================================
+
+USE_DEPOLARIZING = False
+USE_AMPLITUDE_DAMPING = False
+USE_PHASE_DAMPING = False
+USE_COHERENT_OVERROTATION = False
+
+# ============================================================
+# Noise parameters for a simulator
+# ============================================================
+
+depolarizing_strength = 0.02
+amplitude_damping_strength = 0.02
+phase_damping_strength = 0.02
+
+# coherent over-rotation angle
+overrotation_epsilon = 0.02
+
+
+
+# ============================================================
+# Initial state preparation
+# ============================================================
+
 alpha   = 0.7
 beta    = 0.4
 
 # ============================================================
 # U parameters
 # ============================================================
+
 theta_x1 = 0.5
 theta_y1 = 0.6
 theta_z1 = 0.8
@@ -38,28 +80,40 @@ theta_x6 = 0.7
 theta_y6 = 0.7
 theta_z6 = 0.7
 
-
 # ============================================================
-# Noise flags
-# ============================================================
-
-USE_DEPOLARIZING = False
-USE_AMPLITUDE_DAMPING = False
-USE_PHASE_DAMPING = False
-USE_COHERENT_OVERROTATION = False
-
-# ============================================================
-# Noise parameters
+# U gate sequence
 # ============================================================
 
-depolarizing_strength = 0.02
+U_GATES = [
+    ("x", theta_x1),
+    ("y", theta_y1),
+    ("z", theta_z1),
 
-amplitude_damping_strength = 0.02
+    ("x", theta_x2),
+    ("y", theta_y2),
+    ("z", theta_z2),
 
-phase_damping_strength = 0.02
+    ("x", theta_x3),
+    ("y", theta_y3),
+    ("z", theta_z3),
 
-# coherent over-rotation angle
-overrotation_epsilon = 0.02
+    ("x", theta_x4),
+    ("y", theta_y4),
+    ("z", theta_z4),
+
+    ("x", theta_x5),
+    ("y", theta_y5),
+    ("z", theta_z5),
+
+    ("x", theta_x6),
+    ("y", theta_y6),
+    ("z", theta_z6),
+]
+
+if not 1 <= DEPTH <= len(U_GATES):
+    raise ValueError(
+        f"DEPTH must be between 1 and {len(U_GATES)}, got {DEPTH}."
+    )
 
 
 # ============================================================
@@ -127,128 +181,83 @@ def apply_noise(qc, wire, axis, epsilon):
             coherent_noise,
             [wire]
         )
+
+def apply_rotation(qc, wire, axis, angle):
+
+    if axis == "x":
+        qc.rx(angle, wire)
+
+    elif axis == "y":
+        qc.ry(angle, wire)
+
+    elif axis == "z":
+        qc.rz(angle, wire)
+
 def applyU(qc, wire):
 
-    qc.rx(theta_x1, wire)
-    apply_noise(qc, wire, "x", +overrotation_epsilon)
+    for axis, theta in U_GATES[:DEPTH]:
 
-    qc.ry(theta_y1, wire)
-    apply_noise(qc, wire, "y", +overrotation_epsilon)
+        apply_rotation(qc, wire, axis, theta)
 
-    qc.rz(theta_z1, wire)
-    apply_noise(qc, wire, "z", +overrotation_epsilon)
-
-    qc.rx(theta_x2, wire)
-    apply_noise(qc, wire, "x", +overrotation_epsilon)
-
-    qc.ry(theta_y2, wire)
-    apply_noise(qc, wire, "y", +overrotation_epsilon)
-
-    qc.rz(theta_z2, wire)
-    apply_noise(qc, wire, "z", +overrotation_epsilon)
-
-    qc.rx(theta_x3, wire)
-    apply_noise(qc, wire, "x", +overrotation_epsilon)
-
-    qc.ry(theta_y3, wire)
-    apply_noise(qc, wire, "y", +overrotation_epsilon)
-
-    qc.rz(theta_z3, wire)
-    apply_noise(qc, wire, "z", +overrotation_epsilon)
-
-    qc.rx(theta_x4, wire)
-    apply_noise(qc, wire, "x", +overrotation_epsilon)
-
-    qc.ry(theta_y4, wire)
-    apply_noise(qc, wire, "y", +overrotation_epsilon)
-
-    qc.rz(theta_z4, wire)
-    apply_noise(qc, wire, "z", +overrotation_epsilon)
-
-    qc.rx(theta_x5, wire)
-    apply_noise(qc, wire, "x", +overrotation_epsilon)
-
-    qc.ry(theta_y5, wire)
-    apply_noise(qc, wire, "y", +overrotation_epsilon)
-
-    qc.rz(theta_z5, wire)
-    apply_noise(qc, wire, "z", +overrotation_epsilon)
-
-    qc.rx(theta_x6, wire)
-    apply_noise(qc, wire, "x", +overrotation_epsilon)
-
-    qc.ry(theta_y6, wire)
-    apply_noise(qc, wire, "y", +overrotation_epsilon)
-
-    qc.rz(theta_z6, wire)
-    apply_noise(qc, wire, "z", +overrotation_epsilon)
+        # Manual noise only for simulator
+        if not USE_REAL_HARDWARE:
+            apply_noise(
+                qc,
+                wire,
+                axis,
+                +overrotation_epsilon
+            )
 
 
 def applyUdagger(qc, wire):
 
-    qc.rz(-theta_z6, wire)
-    apply_noise(qc, wire, "z", -overrotation_epsilon)
+    # Reverse the gates used in U and negate their angles
+    for axis, theta in reversed(U_GATES[:DEPTH]):
 
-    qc.ry(-theta_y6, wire)
-    apply_noise(qc, wire, "y", -overrotation_epsilon)
+        apply_rotation(qc, wire, axis, -theta)
 
-    qc.rx(-theta_x6, wire)
-    apply_noise(qc, wire, "x", -overrotation_epsilon)
+        # Manual noise only for simulator
+        if not USE_REAL_HARDWARE:
+            apply_noise(
+                qc,
+                wire,
+                axis,
+                -overrotation_epsilon
+            )
 
-    qc.rz(-theta_z5, wire)
-    apply_noise(qc, wire, "z", -overrotation_epsilon)
 
-    qc.ry(-theta_y5, wire)
-    apply_noise(qc, wire, "y", -overrotation_epsilon)
+# ============================================================
+# Backend
+# ============================================================
 
-    qc.rx(-theta_x5, wire)
-    apply_noise(qc, wire, "x", -overrotation_epsilon)
+if USE_REAL_HARDWARE:
 
-    qc.rz(-theta_z4, wire)
-    apply_noise(qc, wire, "z", -overrotation_epsilon)
+    if not QiskitRuntimeService.saved_accounts():
+        raise RuntimeError(
+            "USE_REAL_HARDWARE=True, but no IBM Quantum account is saved."
+        )
 
-    qc.ry(-theta_y4, wire)
-    apply_noise(qc, wire, "y", -overrotation_epsilon)
+    service = QiskitRuntimeService(channel="ibm_quantum")
 
-    qc.rx(-theta_x4, wire)
-    apply_noise(qc, wire, "x", -overrotation_epsilon)
+    backend = service.least_busy(
+        operational=True,
+        simulator=False,
+        dynamic_circuits=True # To make it consistent with depth-reduced method
+    )
 
-    qc.rz(-theta_z3, wire)
-    apply_noise(qc, wire, "z", -overrotation_epsilon)
+else:
 
-    qc.ry(-theta_y3, wire)
-    apply_noise(qc, wire, "y", -overrotation_epsilon)
+    backend = AerSimulator()
+    backend.set_options(seed_simulator=150)
 
-    qc.rx(-theta_x3, wire)
-    apply_noise(qc, wire, "x", -overrotation_epsilon)
 
-    qc.rz(-theta_z2, wire)
-    apply_noise(qc, wire, "z", -overrotation_epsilon)
-
-    qc.ry(-theta_y2, wire)
-    apply_noise(qc, wire, "y", -overrotation_epsilon)
-
-    qc.rx(-theta_x2, wire)
-    apply_noise(qc, wire, "x", -overrotation_epsilon)
-
-    qc.rz(-theta_z1, wire)
-    apply_noise(qc, wire, "z", -overrotation_epsilon)
-
-    qc.ry(-theta_y1, wire)
-    apply_noise(qc, wire, "y", -overrotation_epsilon)
-
-    qc.rx(-theta_x1, wire)
-    apply_noise(qc, wire, "x", -overrotation_epsilon)
-
-backend = AerSimulator()
-backend.set_options(seed_simulator=150)
-
+# ============================================================
+# Circuit running
+# ============================================================
 
 folded_circuits = []
 
-scale_factors = [1, 3, 5, 7, 9, 11]
-
-for scale in scale_factors:
+for depth_folded in depth_folded_circuits:
     q = QuantumRegister(1, 'q')
     c = ClassicalRegister(1, 'c')
     qc = QuantumCircuit(q, c)
@@ -258,16 +267,19 @@ for scale in scale_factors:
     qc.barrier()
 
 
-    num_pairs = (scale - 1) // 2
+    num_fold = (depth_folded - 1) // 2
 
     applyU(qc, q[0])
-    for _ in range(num_pairs):
+    for _ in range(num_fold):
         applyUdagger(qc,q[0])
         applyU(qc,q[0])
 
     qc.measure(q[0], c[0])
     folded_circuits.append(qc)
 
+# ============================================================
+# Transpilation
+# ============================================================
 pm = generate_preset_pass_manager(
     backend=backend,
     optimization_level=0
@@ -278,15 +290,17 @@ exec_circuits = [
     for circuit in folded_circuits
 ]
 
-sampler = Sampler(backend)
+sampler = Sampler(mode=backend)
 
 job = sampler.run(
     exec_circuits,
     shots=shots
 )
 
+result = job.result()
+
 all_counts = [
-    job.result()[i].join_data().get_counts()
+    result[i].join_data().get_counts()
     for i in range(len(folded_circuits))
 ]
 
@@ -301,13 +315,47 @@ for counts in all_counts:
 
     expectation_values.append(expectation)
 
+
+# ============================================================
+# Print experiment configuration
+# ============================================================
+
+print(f"\nDEPTH = {DEPTH}")
+
+if USE_REAL_HARDWARE:
+    print(f"Backend: {backend.name}")
+
+else:
+    print("Backend: AerSimulator")
+
+    active_noises = []
+
+    if USE_DEPOLARIZING:
+        active_noises.append("Depolarizing")
+
+    if USE_AMPLITUDE_DAMPING:
+        active_noises.append("Amplitude damping")
+
+    if USE_PHASE_DAMPING:
+        active_noises.append("Phase damping")
+
+    if USE_COHERENT_OVERROTATION:
+        active_noises.append("Coherent overrotation")
+
+    if active_noises:
+        print("Noise:", ", ".join(active_noises))
+    else:
+        print("Noise: none")
+
+
 print(f"\nExpectation values of circuit_folded method:\n"
       f"{[round(x, 5) for x in expectation_values]}")
+
 # ============================================================
 # Zero-noise extrapolation
 # ============================================================
-scale_factors_np = np.array(
-    scale_factors,
+depth_folded_circuits_np = np.array(
+    depth_folded_circuits,
     dtype=float
 )
 
@@ -319,7 +367,7 @@ expectation_values_np = np.array(
 
 for degree in [1, 2, 3, 4]:
     coeffs = np.polyfit(
-        scale_factors_np,
+        depth_folded_circuits_np,
         expectation_values_np,
         deg=degree
     )
@@ -330,7 +378,3 @@ for degree in [1, 2, 3, 4]:
         f"degree {degree}: "
         f"{zero_noise:.6f}"
     )
-expectation_values_np = np.array(
-    expectation_values,
-    dtype=float
-)
