@@ -8,13 +8,54 @@ from qiskit_aer.noise import (
 from qiskit.quantum_info import Operator
 from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2 as Sampler
 from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
-from mitiq.interface.mitiq_qiskit.qiskit_utils import initialized_depolarizing_noise
 from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
 import numpy as np
-import matplotlib.pyplot as plt
 
 
-shots = 10**7
+# ============================================================
+# Hardware / simulator
+# ============================================================
+
+USE_REAL_HARDWARE = False
+shots = 10**4
+
+# ============================================================
+# Depth of the unitary U
+# ============================================================
+
+DEPTH = 2
+
+# ============================================================
+# Number of foldings
+# ============================================================
+
+depth_folded_circuits = [1, 3, 5, 7, 9, 11]
+
+# ============================================================
+# Noise flags for a simulator
+# ============================================================
+
+USE_DEPOLARIZING = True
+USE_AMPLITUDE_DAMPING = False
+USE_PHASE_DAMPING = True
+USE_COHERENT_OVERROTATION = True
+
+# ============================================================
+# Noise parameters for a simulator
+# ============================================================
+
+depolarizing_strength = 0.02
+amplitude_damping_strength = 0.02
+phase_damping_strength = 0.02
+
+# coherent over-rotation angle
+overrotation_epsilon = 0.02
+
+
+# ============================================================
+# Initial state preparation
+# ============================================================
+
 alpha   = 0.7
 beta    = 0.4
 
@@ -40,29 +81,40 @@ theta_x6 = 0.7
 theta_y6 = 0.7
 theta_z6 = 0.7
 
-
 # ============================================================
-# Noise flags
-# ============================================================
-
-USE_DEPOLARIZING = False
-USE_AMPLITUDE_DAMPING = False
-USE_PHASE_DAMPING = False
-USE_COHERENT_OVERROTATION = False
-
-# ============================================================
-# Noise parameters
+# U gate sequence
 # ============================================================
 
-depolarizing_strength = 0.02
+U_GATES = [
+    ("x", theta_x1),
+    ("y", theta_y1),
+    ("z", theta_z1),
 
-amplitude_damping_strength = 0.02
+    ("x", theta_x2),
+    ("y", theta_y2),
+    ("z", theta_z2),
 
-phase_damping_strength = 0.02
+    ("x", theta_x3),
+    ("y", theta_y3),
+    ("z", theta_z3),
 
-# coherent over-rotation angle
-overrotation_epsilon = 0.02
+    ("x", theta_x4),
+    ("y", theta_y4),
+    ("z", theta_z4),
 
+    ("x", theta_x5),
+    ("y", theta_y5),
+    ("z", theta_z5),
+
+    ("x", theta_x6),
+    ("y", theta_y6),
+    ("z", theta_z6),
+]
+
+if not 1 <= DEPTH <= len(U_GATES):
+    raise ValueError(
+        f"DEPTH must be between 1 and {len(U_GATES)}, got {DEPTH}."
+    )
 
 # ============================================================
 # Noise instructions
@@ -73,38 +125,12 @@ depolarizing_noise = depolarizing_error(
     1
 ).to_instruction()
 
-
 amplitude_damping_noise = amplitude_damping_error(
     amplitude_damping_strength
 ).to_instruction()
 
-
 phase_damping_noise = phase_damping_error(
     phase_damping_strength
-).to_instruction()
-
-
-
-overrotation_x_circuit = QuantumCircuit(1)
-overrotation_x_circuit.rx(overrotation_epsilon, 0)
-
-overrotation_y_circuit = QuantumCircuit(1)
-overrotation_y_circuit.ry(overrotation_epsilon, 0)
-
-overrotation_z_circuit = QuantumCircuit(1)
-overrotation_z_circuit.rz(overrotation_epsilon, 0)
-
-
-coherent_x_noise = coherent_unitary_error(
-    Operator(overrotation_x_circuit)
-).to_instruction()
-
-coherent_y_noise = coherent_unitary_error(
-    Operator(overrotation_y_circuit)
-).to_instruction()
-
-coherent_z_noise = coherent_unitary_error(
-    Operator(overrotation_z_circuit)
 ).to_instruction()
 
 
@@ -134,28 +160,59 @@ def apply_noise(qc, wire, axis):
 
     if USE_COHERENT_OVERROTATION:
 
+        error_circuit = QuantumCircuit(1)
+
         if axis == "x":
-            qc.append(
-                coherent_x_noise,
-                [wire]
-            )
+            error_circuit.rx(overrotation_epsilon, 0)
 
         elif axis == "y":
-            qc.append(
-                coherent_y_noise,
-                [wire]
-            )
+            error_circuit.ry(overrotation_epsilon, 0)
 
         elif axis == "z":
-            qc.append(
-                coherent_z_noise,
-                [wire]
+            error_circuit.rz(overrotation_epsilon, 0)
+
+        coherent_noise = coherent_unitary_error(
+            Operator(error_circuit)
+        ).to_instruction()
+
+        qc.append(
+            coherent_noise,
+            [wire]
+        )
+
+
+def apply_rotation(qc, wire, axis, angle):
+
+    if axis == "x":
+        qc.rx(angle, wire)
+
+    elif axis == "y":
+        qc.ry(angle, wire)
+
+    elif axis == "z":
+        qc.rz(angle, wire)
+
+
+def applyU(qc, wires):
+
+    for wire in wires:
+
+        for axis, theta in U_GATES[:DEPTH]:
+
+            apply_rotation(
+                qc,
+                wire,
+                axis,
+                theta
             )
 
-
-backend = AerSimulator()
-backend.set_options(seed_simulator=150)
-
+            # Artificial noise only for simulator
+            if not USE_REAL_HARDWARE:
+                apply_noise(
+                    qc,
+                    wire,
+                    axis,
+                )
 
 def psi_minus(qc, wires):
     qc.h(wires[0])
@@ -166,64 +223,6 @@ def psi_minus(qc, wires):
 def bell_measure(qc, wires):
     qc.cx(wires[0], wires[1])
     qc.h(wires[0])
-
-def applyU(qc, wires):
-
-    for wire in wires:
-        qc.rx(theta_x1, wire)
-        apply_noise(qc, wire, "x")
-
-        qc.ry(theta_y1, wire)
-        apply_noise(qc, wire, "y")
-
-        qc.rz(theta_z1, wire)
-        apply_noise(qc, wire, "z")
-
-        qc.rx(theta_x2, wire)
-        apply_noise(qc, wire, "x")
-
-        qc.ry(theta_y2, wire)
-        apply_noise(qc, wire, "y")
-
-        qc.rz(theta_z2, wire)
-        apply_noise(qc, wire, "z")
-
-        qc.rx(theta_x3, wire)
-        apply_noise(qc, wire, "x")
-
-        qc.ry(theta_y3, wire)
-        apply_noise(qc, wire, "y")
-
-        qc.rz(theta_z3, wire)
-        apply_noise(qc, wire, "z")
-
-        qc.rx(theta_x4, wire)
-        apply_noise(qc, wire, "x")
-
-        qc.ry(theta_y4, wire)
-        apply_noise(qc, wire, "y")
-
-        qc.rz(theta_z4, wire)
-        apply_noise(qc, wire, "z")
-
-        qc.rx(theta_x5, wire)
-        apply_noise(qc, wire, "x")
-
-        qc.ry(theta_y5, wire)
-        apply_noise(qc, wire, "y")
-
-        qc.rz(theta_z5, wire)
-        apply_noise(qc, wire, "z")
-
-        qc.rx(theta_x6, wire)
-        apply_noise(qc, wire, "x")
-
-        qc.ry(theta_y6, wire)
-        apply_noise(qc, wire, "y")
-
-        qc.rz(theta_z6, wire)
-        apply_noise(qc, wire, "z")
-
 
 def apply_correction(qc, c_pair, target):
     """
@@ -249,23 +248,43 @@ def apply_correction(qc, c_pair, target):
     # 11 -> I
     # do nothing
 
+# ============================================================
+# Backend
+# ============================================================
+
+if USE_REAL_HARDWARE:
+
+    if not QiskitRuntimeService.saved_accounts():
+        raise RuntimeError(
+            "USE_REAL_HARDWARE=True, but no IBM Quantum account is saved."
+        )
+
+    service = QiskitRuntimeService(channel="ibm_quantum")
+
+    backend = service.least_busy(
+        operational=True,
+        simulator=False,
+        dynamic_circuits=True
+    )
+else:
+
+    backend = AerSimulator()
+    backend.set_options(seed_simulator=150)
+
 folded_circuits = []
 
-#scale_factors = [1, 3, 5, 7, 9, 11]
-scale_factors = [1]
-
-for scale in scale_factors:
-    q = QuantumRegister(scale, 'q')
+for depth_folded in depth_folded_circuits:
+    q = QuantumRegister(depth_folded, 'q')
     qc = QuantumCircuit(q)
 
-    num_pairs = (scale - 1) // 2
+    num_fold = (depth_folded - 1) // 2
 
     # --------------------------------------------------------
     # Classical register for EACH Bell measurement
     # --------------------------------------------------------
     classical_pairs = []
-    for pair in range(num_pairs):
-        c_pair = ClassicalRegister(2, f'c{pair}')
+    for fold in range(num_fold):
+        c_pair = ClassicalRegister(2, f'c{fold}')
         qc.add_register(c_pair)
         classical_pairs.append(c_pair)
     c_out = ClassicalRegister(1, "out")
@@ -281,16 +300,16 @@ for scale in scale_factors:
     # ========================================================
     # 2. Prepare psi-minus states
     #
-    # scale = 3:
+    # depth_folded = 3:
     #   (q1,q2)
     #
-    # scale = 5:
+    # depth_folded = 5:
     #   (q1,q2), (q3,q4)
     #
     # etc.
     # ========================================================
-    for pair in range(num_pairs):
-        psi_minus(qc,[q[2*pair+1],q[2*pair+2]])
+    for fold in range(num_fold):
+        psi_minus(qc,[q[2*fold+1],q[2*fold+2]])
     qc.barrier()
 
 
@@ -304,17 +323,17 @@ for scale in scale_factors:
     # ========================================================
     # 4. Bell measurement basis transformation
     #
-    # scale = 3:
+    # depth_folded = 3:
     #   (q0,q1)
     #
-    # scale = 5:
+    # depth_folded = 5:
     #   (q0,q1), (q2,q3)
     #
     # etc.
     # ========================================================
-    for pair in range(num_pairs):
-        qA = q[2 * pair]
-        qB = q[2 * pair + 1]
+    for fold in range(num_fold):
+        qA = q[2 * fold]
+        qB = q[2 * fold + 1]
         bell_measure(qc, [qA, qB])
     qc.barrier()
 
@@ -322,10 +341,10 @@ for scale in scale_factors:
     # ========================================================
     # 5. All Bell measurements
     # ========================================================
-    for pair in range(num_pairs):
-        qA = q[2 * pair]
-        qB = q[2 * pair + 1]
-        c_pair = classical_pairs[pair]
+    for fold in range(num_fold):
+        qA = q[2 * fold]
+        qB = q[2 * fold + 1]
+        c_pair = classical_pairs[fold]
         qc.measure(qA, c_pair[1])
         qc.measure(qB, c_pair[0])
     qc.barrier()
@@ -335,28 +354,28 @@ for scale in scale_factors:
     #
     # All corrections are applied to the LAST qubit.
     #
-    # scale = 1:
+    # depth_folded = 1:
     #   no correction
     #
-    # scale = 3:
+    # depth_folded = 3:
     #   correction from (q0,q1) -> q2
     #
-    # scale = 5:
+    # depth_folded = 5:
     #   correction from (q0,q1) -> q4
     #   correction from (q2,q3) -> q4
     #
-    # scale = 7:
+    # depth_folded = 7:
     #   correction from (q0,q1) -> q6
     #   correction from (q2,q3) -> q6
     #   correction from (q4,q5) -> q6
     #
     # ========================================================
-    target = q[scale - 1]
+    target = q[depth_folded - 1]
 
-    for pair in range(num_pairs):
+    for fold in range(num_fold):
         apply_correction(
             qc,
-            classical_pairs[pair],
+            classical_pairs[fold],
             target
         )
 
@@ -373,13 +392,13 @@ for scale in scale_factors:
 
     folded_circuits.append(qc)
 
-    #print(f"\nScale factor = {scale}")
+    #print(f"\n Depth_folded = {depth_folded}")
     #qc.draw('mpl')
     #plt.show()
 
 
 # ============================================================
-# Zero-noise extrapolation
+# Transpilation
 # ============================================================
 pm = generate_preset_pass_manager(
     backend=backend,
@@ -391,7 +410,7 @@ exec_circuits = [
     for circuit in folded_circuits
 ]
 
-sampler = Sampler(backend)
+sampler = Sampler(mode=backend)
 
 job = sampler.run(
     exec_circuits,
@@ -412,6 +431,36 @@ for i in range(len(folded_circuits)):
     p1 = out_counts.get("1", 0) / shots
 
     expectation_values.append(p0-p1)
+# ============================================================
+# Print experiment configuration
+# ============================================================
+
+print(f"\nDEPTH = {DEPTH}")
+
+if USE_REAL_HARDWARE:
+    print(f"Backend: {backend.name}")
+
+else:
+    print("Backend: AerSimulator")
+
+    active_noises = []
+
+    if USE_DEPOLARIZING:
+        active_noises.append("Depolarizing")
+
+    if USE_AMPLITUDE_DAMPING:
+        active_noises.append("Amplitude damping")
+
+    if USE_PHASE_DAMPING:
+        active_noises.append("Phase damping")
+
+    if USE_COHERENT_OVERROTATION:
+        active_noises.append("Coherent overrotation")
+
+    if active_noises:
+        print("Noise:", ", ".join(active_noises))
+    else:
+        print("Noise: none")
 
 print(f"\nExpectation values of depth_reduced method:\n"
       f"{[round(x, 5) for x in expectation_values]}")
@@ -420,8 +469,8 @@ print(f"\nExpectation values of depth_reduced method:\n"
 # ============================================================
 # Zero-noise extrapolation
 # ============================================================
-scale_factors_np = np.array(
-    scale_factors,
+depth_folded_circuits_np = np.array(
+    depth_folded_circuits,
     dtype=float
 )
 
@@ -433,7 +482,7 @@ expectation_values_np = np.array(
 
 for degree in [1, 2, 3, 4]:
     coeffs = np.polyfit(
-        scale_factors_np,
+        depth_folded_circuits_np,
         expectation_values_np,
         deg=degree
     )
