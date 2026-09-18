@@ -14,9 +14,14 @@ import numpy as np
 
 # ============================================================
 # Hardware / simulator
+
+# If you can specify a device. If it is false you use the least busy one.
 # ============================================================
 
 USE_REAL_HARDWARE = False
+DEVICE_NAME = False
+# DEVICE_NAME = "ibm_strasbourg"
+
 shots = 10**4
 
 # ============================================================
@@ -252,6 +257,7 @@ def apply_correction(qc, c_pair, target):
 # Backend
 # ============================================================
 
+
 if USE_REAL_HARDWARE:
 
     if not QiskitRuntimeService.saved_accounts():
@@ -261,11 +267,16 @@ if USE_REAL_HARDWARE:
 
     service = QiskitRuntimeService(channel="ibm_quantum")
 
-    backend = service.least_busy(
-        operational=True,
-        simulator=False,
-        dynamic_circuits=True
-    )
+    if DEVICE_NAME:
+        backend = service.backend(DEVICE_NAME)
+
+    else:
+        backend = service.least_busy(
+            operational=True,
+            simulator=False,
+            dynamic_circuits=True,
+        )
+
 else:
 
     backend = AerSimulator()

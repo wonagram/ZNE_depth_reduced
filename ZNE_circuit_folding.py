@@ -11,8 +11,15 @@ from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
 from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
 import numpy as np
 
+# ============================================================
+# Hardware / simulator
+
+# If you can specify a device. If it is false you use the least busy one.
+# ============================================================
 
 USE_REAL_HARDWARE = False
+DEVICE_NAME = False
+# DEVICE_NAME = "ibm_strasbourg"
 
 shots = 10**4
 
@@ -230,6 +237,7 @@ def applyUdagger(qc, wire):
 # Backend
 # ============================================================
 
+
 if USE_REAL_HARDWARE:
 
     if not QiskitRuntimeService.saved_accounts():
@@ -239,11 +247,15 @@ if USE_REAL_HARDWARE:
 
     service = QiskitRuntimeService(channel="ibm_quantum")
 
-    backend = service.least_busy(
-        operational=True,
-        simulator=False,
-        dynamic_circuits=True # To make it consistent with depth-reduced method
-    )
+    if DEVICE_NAME:
+        backend = service.backend(DEVICE_NAME)
+
+    else:
+        backend = service.least_busy(
+            operational=True,
+            simulator=False,
+            dynamic_circuits=True,  # To make it consistent with depth-reduced method
+        )
 
 else:
 
