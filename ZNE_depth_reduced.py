@@ -23,7 +23,7 @@ shots = 10**4
 # Depth of the unitary U
 # ============================================================
 
-DEPTH = 2
+DEPTH = 18
 
 # ============================================================
 # Number of foldings
@@ -44,12 +44,12 @@ USE_COHERENT_OVERROTATION = True
 # Noise parameters for a simulator
 # ============================================================
 
-depolarizing_strength = 0.02
-amplitude_damping_strength = 0.02
-phase_damping_strength = 0.02
+depolarizing_strength = 0.05
+amplitude_damping_strength = 0.05
+phase_damping_strength = 0.05
 
 # coherent over-rotation angle
-overrotation_epsilon = 0.02
+overrotation_epsilon = 0.05
 
 
 # ============================================================
