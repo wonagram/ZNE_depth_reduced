@@ -11,6 +11,8 @@ from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
 from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
 import numpy as np
 import matplotlib.pyplot as plt
+from U_config import *
+from state_preparation import *
 
 # ============================================================
 # Hardware / simulator
@@ -37,14 +39,13 @@ DEPTH = 5
 
 NUM_U_QUBITS = 1
 
-
 # ============================================================
 # Circuit drawing
 # If this flag is turn on, it draws only circuit and exit the code.
 # ============================================================
 
 DRAW_CIRCUIT = False
-DRAW_DEPTH_FOLDED = 5
+DRAW_DEPTH_FOLDED = 3
 
 
 # ============================================================
@@ -84,418 +85,6 @@ phase_damping_strength = 0.02
 overrotation_epsilon = 0.02
 
 
-# ============================================================
-# Initial state preparation
-# ============================================================
-
-alpha_0   = 0.7
-alpha_1   = 0.6
-alpha_2   = 0.5
-alpha_3   = 0.4
-
-beta_0    = 0.4
-beta_1    = 0.3
-beta_2    = 0.2
-beta_3    = 0.1
-
-# ============================================================
-# U parameters
-# ============================================================
-theta_x1 = 0.5
-theta_y1 = 0.6
-theta_z1 = 0.8
-theta_x2 = 0.4
-theta_y2 = 0.4
-theta_z2 = 0.4
-theta_x3 = 0.6
-theta_y3 = 0.5
-theta_z3 = 0.9
-theta_x4 = 0.3
-theta_y4 = 0.4
-theta_z4 = 0.5
-theta_x5 = 0.8
-theta_y5 = 0.7
-theta_z5 = 0.6
-theta_x6 = 0.7
-theta_y6 = 0.7
-theta_z6 = 0.7
-
-# ============================================================
-# U gate sequence
-# ============================================================
-U_GATES = {
-    1: [
-        # Layer 1
-        [("x", 0, theta_x1)],
-
-        # Layer 2
-        [("y", 0, theta_y1)],
-
-        # Layer 3
-        [("z", 0, theta_z1)],
-
-        # Layer 4
-        [("x", 0, theta_x2)],
-
-        # Layer 5
-        [("y", 0, theta_y2)],
-
-        # Layer 6
-        [("z", 0, theta_z2)],
-
-        # Layer 7
-        [("x", 0, theta_x3)],
-
-        # Layer 8
-        [("y", 0, theta_y3)],
-
-        # Layer 9
-        [("z", 0, theta_z3)],
-
-        # Layer 10
-        [("x", 0, theta_x4)],
-
-        # Layer 11
-        [("y", 0, theta_y4)],
-
-        # Layer 12
-        [("z", 0, theta_z4)],
-
-        # Layer 13
-        [("x", 0, theta_x5)],
-
-        # Layer 14
-        [("y", 0, theta_y5)],
-
-        # Layer 15
-        [("z", 0, theta_z5)],
-
-        # Layer 16
-        [("x", 0, theta_x6)],
-
-        # Layer 17
-        [("y", 0, theta_y6)],
-
-        # Layer 18
-        [("z", 0, theta_z6)],
-    ],
-
-    2: [
-        # Layer 1
-        [
-            ("x", 0, theta_x1),
-            ("x", 1, theta_x1),
-        ],
-
-        # Layer 2
-        [
-            ("cx", 0, 1),
-        ],
-
-        # Layer 3
-        [
-            ("y", 0, theta_y1),
-            ("y", 1, theta_y1),
-        ],
-
-        # Layer 4
-        [
-            ("cx", 1, 0),
-        ],
-
-        # Layer 5
-        [
-            ("z", 0, theta_z1),
-            ("z", 1, theta_z1),
-        ],
-
-        # Layer 6
-        [
-            ("cx", 0, 1),
-        ],
-
-        # Layer 7
-        [
-            ("x", 0, theta_x2),
-            ("x", 1, theta_x2),
-        ],
-
-        # Layer 8
-        [
-            ("cx", 1, 0),
-        ],
-
-        # Layer 9
-        [
-            ("y", 0, theta_y2),
-            ("y", 1, theta_y2),
-        ],
-
-        # Layer 10
-        [
-            ("cx", 0, 1),
-        ],
-
-        # Layer 11
-        [
-            ("z", 0, theta_z2),
-            ("z", 1, theta_z2),
-        ],
-
-        # Layer 12
-        [
-            ("cx", 1, 0),
-        ],
-
-        # Layer 13
-        [
-            ("x", 0, theta_x3),
-            ("x", 1, theta_x3),
-        ],
-
-        # Layer 14
-        [
-            ("cx", 0, 1),
-        ],
-
-        # Layer 15
-        [
-            ("y", 0, theta_y3),
-            ("y", 1, theta_y3),
-        ],
-
-        # Layer 16
-        [
-            ("cx", 1, 0),
-        ],
-
-        # Layer 17
-        [
-            ("z", 0, theta_z3),
-            ("z", 1, theta_z3),
-        ],
-
-        # Layer 18
-        [
-            ("cx", 0, 1),
-        ],
-    ],
-
-    3: [
-        # Layer 1
-        [
-            ("x", 0, theta_x1),
-            ("x", 1, theta_x1),
-            ("x", 2, theta_x1),
-        ],
-
-        # Layer 2
-        [
-            ("cx", 0, 1),
-        ],
-
-        # Layer 3
-        [
-            ("cx", 1, 2),
-        ],
-
-        # Layer 4
-        [
-            ("y", 0, theta_y1),
-            ("y", 1, theta_y1),
-            ("y", 2, theta_y1),
-        ],
-
-        # Layer 5
-        [
-            ("cx", 2, 1),
-        ],
-
-        # Layer 6
-        [
-            ("cx", 0, 1),
-        ],
-
-        # Layer 7
-        [
-            ("z", 0, theta_z1),
-            ("z", 1, theta_z1),
-            ("z", 2, theta_z1),
-        ],
-
-        # Layer 8
-        [
-            ("cx", 1, 2),
-        ],
-
-        # Layer 9
-        [
-            ("cx", 2, 1),
-        ],
-
-        # Layer 10
-        [
-            ("x", 0, theta_x2),
-            ("x", 1, theta_x2),
-            ("x", 2, theta_x2),
-        ],
-
-        # Layer 11
-        [
-            ("cx", 0, 1),
-        ],
-
-        # Layer 12
-        [
-            ("cx", 1, 2),
-        ],
-
-        # Layer 13
-        [
-            ("y", 0, theta_y2),
-            ("y", 1, theta_y2),
-            ("y", 2, theta_y2),
-        ],
-
-        # Layer 14
-        [
-            ("cx", 2, 1),
-        ],
-
-        # Layer 15
-        [
-            ("cx", 0, 1),
-        ],
-
-        # Layer 16
-        [
-            ("z", 0, theta_z2),
-            ("z", 1, theta_z2),
-            ("z", 2, theta_z2),
-        ],
-
-        # Layer 17
-        [
-            ("cx", 1, 2),
-        ],
-
-        # Layer 18
-        [
-            ("cx", 2, 1),
-        ],
-    ],
-
-    4: [
-        # Layer 1
-        [
-            ("x", 0, theta_x1),
-            ("x", 1, theta_x1),
-            ("x", 2, theta_x1),
-            ("x", 3, theta_x1),
-        ],
-
-        # Layer 2
-        [
-            ("cx", 0, 1),
-            ("cx", 2, 3),
-        ],
-
-        # Layer 3
-        [
-            ("y", 0, theta_y1),
-            ("y", 1, theta_y1),
-            ("y", 2, theta_y1),
-            ("y", 3, theta_y1),
-        ],
-
-        # Layer 4
-        [
-            ("cx", 1, 2),
-        ],
-
-        # Layer 5
-        [
-            ("z", 0, theta_z1),
-            ("z", 1, theta_z1),
-            ("z", 2, theta_z1),
-            ("z", 3, theta_z1),
-        ],
-
-        # Layer 6
-        [
-            ("cx", 3, 2),
-            ("cx", 1, 0),
-        ],
-
-        # Layer 7
-        [
-            ("x", 0, theta_x2),
-            ("x", 1, theta_x2),
-            ("x", 2, theta_x2),
-            ("x", 3, theta_x2),
-        ],
-
-        # Layer 8
-        [
-            ("cx", 2, 1),
-        ],
-
-        # Layer 9
-        [
-            ("y", 0, theta_y2),
-            ("y", 1, theta_y2),
-            ("y", 2, theta_y2),
-            ("y", 3, theta_y2),
-        ],
-
-        # Layer 10
-        [
-            ("cx", 0, 1),
-            ("cx", 2, 3),
-        ],
-
-        # Layer 11
-        [
-            ("z", 0, theta_z2),
-            ("z", 1, theta_z2),
-            ("z", 2, theta_z2),
-            ("z", 3, theta_z2),
-        ],
-
-        # Layer 12
-        [
-            ("cx", 1, 2),
-        ],
-
-        # Layer 13
-        [
-            ("x", 0, theta_x3),
-            ("x", 1, theta_x3),
-            ("x", 2, theta_x3),
-            ("x", 3, theta_x3),
-        ],
-
-        # Layer 14
-        [
-            ("cx", 3, 2),
-            ("cx", 1, 0),
-        ],
-
-        # Layer 15
-        [
-            ("y", 0, theta_y3),
-            ("y", 1, theta_y3),
-            ("y", 2, theta_y3),
-            ("y", 3, theta_y3),
-        ],
-
-        # Layer 16
-        [
-            ("cx", 2, 1),
-        ],
-    ],
-}
-
 if NUM_U_QUBITS not in U_GATES:
     raise ValueError(
         f"Unsupported NUM_U_QUBITS = {NUM_U_QUBITS}"
@@ -506,65 +95,6 @@ if not 1 <= DEPTH <= len(U_layers):
     raise ValueError(
         f"DEPTH must be between 1 and {len(U_layers)}, got {DEPTH}."
     )
-
-# ============================================================
-# State preparation
-# ============================================================
-
-def prepare_initial_state(qc, wires):
-
-    if NUM_U_QUBITS == 1:
-
-        qc.ry(alpha_0, wires[0])
-        qc.rz(beta_0, wires[0])
-
-
-    elif NUM_U_QUBITS == 2:
-
-        qc.ry(alpha_0, wires[0])
-        qc.ry(alpha_1, wires[1])
-
-        qc.rz(beta_0, wires[0])
-        qc.rz(beta_1, wires[1])
-
-        qc.cx(wires[0], wires[1])
-
-
-    elif NUM_U_QUBITS == 3:
-
-        qc.ry(alpha_0, wires[0])
-        qc.ry(alpha_1, wires[1])
-        qc.ry(alpha_2, wires[2])
-
-        qc.rz(beta_0, wires[0])
-        qc.rz(beta_1, wires[1])
-        qc.rz(beta_2, wires[2])
-
-        qc.cx(wires[0], wires[1])
-        qc.cx(wires[1], wires[2])
-
-
-    elif NUM_U_QUBITS == 4:
-
-        qc.ry(alpha_0, wires[0])
-        qc.ry(alpha_1, wires[1])
-        qc.ry(alpha_2, wires[2])
-        qc.ry(alpha_3, wires[3])
-
-        qc.rz(beta_0, wires[0])
-        qc.rz(beta_1, wires[1])
-        qc.rz(beta_2, wires[2])
-        qc.rz(beta_3, wires[3])
-
-        qc.cx(wires[0], wires[1])
-        qc.cx(wires[1], wires[2])
-        qc.cx(wires[2], wires[3])
-
-    else:
-        raise ValueError(
-            f"Unsupported NUM_U_QUBITS = {NUM_U_QUBITS}"
-        )
-
 
 # ============================================================
 # Noise instructions
@@ -581,13 +111,14 @@ depolarizing_noise_2q = depolarizing_error(
 ).to_instruction()
 
 amplitude_damping_noise = amplitude_damping_error(
-    amplitude_damping_strength
+    amplitude_damping_strength,
+    canonical_kraus=False
 ).to_instruction()
 
 phase_damping_noise = phase_damping_error(
-    phase_damping_strength
+    phase_damping_strength,
+    canonical_kraus=False
 ).to_instruction()
-
 
 # ============================================================
 # Apply selected noise channels
@@ -653,10 +184,41 @@ def apply_noise(qc, wires, gate_type):
         control = wires[0]
         target = wires[1]
 
+        # ----------------------------------------------------
+        # 2-qubit depolarizing noise
+        # ----------------------------------------------------
         if USE_DEPOLARIZING:
             qc.append(
                 depolarizing_noise_2q,
                 [control, target]
+            )
+
+        # ----------------------------------------------------
+        # Independent amplitude damping on both qubits
+        # ----------------------------------------------------
+        if USE_AMPLITUDE_DAMPING:
+            qc.append(
+                amplitude_damping_noise,
+                [control]
+            )
+
+            qc.append(
+                amplitude_damping_noise,
+                [target]
+            )
+
+        # ----------------------------------------------------
+        # Independent phase damping on both qubits
+        # ----------------------------------------------------
+        if USE_PHASE_DAMPING:
+            qc.append(
+                phase_damping_noise,
+                [control]
+            )
+
+            qc.append(
+                phase_damping_noise,
+                [target]
             )
 
 def apply_rotation(qc, wire, axis, angle):
