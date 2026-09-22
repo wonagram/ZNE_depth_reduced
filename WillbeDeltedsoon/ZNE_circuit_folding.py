@@ -11,7 +11,6 @@ from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
 from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
 import numpy as np
 
-
 # ============================================================
 # Hardware / simulator
 
@@ -28,7 +27,7 @@ shots = 10**4
 # Depth of the unitary U
 # ============================================================
 
-DEPTH = 18
+DEPTH = 3
 
 # ============================================================
 # Number of foldings
@@ -49,12 +48,13 @@ USE_COHERENT_OVERROTATION = True
 # Noise parameters for a simulator
 # ============================================================
 
-depolarizing_strength = 0.05
-amplitude_damping_strength = 0.05
-phase_damping_strength = 0.05
+depolarizing_strength = 0.02
+amplitude_damping_strength = 0.02
+phase_damping_strength = 0.02
 
 # coherent over-rotation angle
-overrotation_epsilon = 0.05
+overrotation_epsilon = 0.02
+
 
 
 # ============================================================
@@ -67,6 +67,7 @@ beta    = 0.4
 # ============================================================
 # U parameters
 # ============================================================
+
 theta_x1 = 0.5
 theta_y1 = 0.6
 theta_z1 = 0.8
@@ -121,6 +122,7 @@ if not 1 <= DEPTH <= len(U_GATES):
         f"DEPTH must be between 1 and {len(U_GATES)}, got {DEPTH}."
     )
 
+
 # ============================================================
 # Noise instructions
 # ============================================================
@@ -130,9 +132,11 @@ depolarizing_noise = depolarizing_error(
     1
 ).to_instruction()
 
+
 amplitude_damping_noise = amplitude_damping_error(
     amplitude_damping_strength
 ).to_instruction()
+
 
 phase_damping_noise = phase_damping_error(
     phase_damping_strength
@@ -143,7 +147,7 @@ phase_damping_noise = phase_damping_error(
 # Apply selected noise channels
 # ============================================================
 
-def apply_noise(qc, wire, axis):
+def apply_noise(qc, wire, axis, epsilon):
 
     if USE_DEPOLARIZING:
         qc.append(
@@ -168,13 +172,13 @@ def apply_noise(qc, wire, axis):
         error_circuit = QuantumCircuit(1)
 
         if axis == "x":
-            error_circuit.rx(overrotation_epsilon, 0)
+            error_circuit.rx(epsilon, 0)
 
         elif axis == "y":
-            error_circuit.ry(overrotation_epsilon, 0)
+            error_circuit.ry(epsilon, 0)
 
         elif axis == "z":
-            error_circuit.rz(overrotation_epsilon, 0)
+            error_circuit.rz(epsilon, 0)
 
         coherent_noise = coherent_unitary_error(
             Operator(error_circuit)
@@ -184,7 +188,6 @@ def apply_noise(qc, wire, axis):
             coherent_noise,
             [wire]
         )
-
 
 def apply_rotation(qc, wire, axis, angle):
 
@@ -197,61 +200,38 @@ def apply_rotation(qc, wire, axis, angle):
     elif axis == "z":
         qc.rz(angle, wire)
 
+def applyU(qc, wire):
 
-def applyU(qc, wires):
+    for axis, theta in U_GATES[:DEPTH]:
 
-    for wire in wires:
+        apply_rotation(qc, wire, axis, theta)
 
-        for axis, theta in U_GATES[:DEPTH]:
-
-            apply_rotation(
+        # Manual noise only for simulator
+        if not USE_REAL_HARDWARE:
+            apply_noise(
                 qc,
                 wire,
                 axis,
-                theta
+                +overrotation_epsilon
             )
 
-            # Artificial noise only for simulator
-            if not USE_REAL_HARDWARE:
-                apply_noise(
-                    qc,
-                    wire,
-                    axis,
-                )
 
-def psi_minus(qc, wires):
-    qc.h(wires[0])
-    qc.cx(wires[0], wires[1])
-    qc.z(wires[0])
-    qc.x(wires[1])
+def applyUdagger(qc, wire):
 
-def bell_measure(qc, wires):
-    qc.cx(wires[0], wires[1])
-    qc.h(wires[0])
+    # Reverse the gates used in U and negate their angles
+    for axis, theta in reversed(U_GATES[:DEPTH]):
 
-def apply_correction(qc, c_pair, target):
-    """
-    Bell outcome:
-        00 -> XZ
-        01 -> Z
-        10 -> X
-        11 -> I
-    """
-    # 00 -> XZ
-    with qc.if_test((c_pair, 0)):
-        qc.z(target)
-        qc.x(target)
+        apply_rotation(qc, wire, axis, -theta)
 
-    # 01 -> Z
-    with qc.if_test((c_pair, 1)):
-        qc.z(target)
+        # Manual noise only for simulator
+        if not USE_REAL_HARDWARE:
+            apply_noise(
+                qc,
+                wire,
+                axis,
+                -overrotation_epsilon
+            )
 
-    # 10 -> X
-    with qc.if_test((c_pair, 2)):
-        qc.x(target)
-
-    # 11 -> I
-    # do nothing
 
 # ============================================================
 # Backend
@@ -274,7 +254,7 @@ if USE_REAL_HARDWARE:
         backend = service.least_busy(
             operational=True,
             simulator=False,
-            dynamic_circuits=True,
+            dynamic_circuits=True,  # To make it consistent with depth-reduced method
         )
 
 else:
@@ -282,131 +262,32 @@ else:
     backend = AerSimulator()
     backend.set_options(seed_simulator=150)
 
+
+# ============================================================
+# Circuit running
+# ============================================================
+
 folded_circuits = []
 
 for depth_folded in depth_folded_circuits:
-    q = QuantumRegister(depth_folded, 'q')
-    qc = QuantumCircuit(q)
+    q = QuantumRegister(1, 'q')
+    c = ClassicalRegister(1, 'c')
+    qc = QuantumCircuit(q, c)
+
+    qc.ry(alpha, q[0])
+    qc.rz(beta, q[0])
+    qc.barrier()
+
 
     num_fold = (depth_folded - 1) // 2
 
-    # --------------------------------------------------------
-    # Classical register for EACH Bell measurement
-    # --------------------------------------------------------
-    classical_pairs = []
-    for fold in range(num_fold):
-        c_pair = ClassicalRegister(2, f'c{fold}')
-        qc.add_register(c_pair)
-        classical_pairs.append(c_pair)
-    c_out = ClassicalRegister(1, "out")
-    qc.add_register(c_out)
+    applyU(qc, q[0])
+    for _ in range(num_fold):
+        applyUdagger(qc,q[0])
+        applyU(qc,q[0])
 
-    # ========================================================
-    # 1. Prepare input state
-    # ========================================================
-    qc.ry(alpha, q[0])
-    qc.rz(beta, q[0])
-
-
-    # ========================================================
-    # 2. Prepare psi-minus states
-    #
-    # depth_folded = 3:
-    #   (q1,q2)
-    #
-    # depth_folded = 5:
-    #   (q1,q2), (q3,q4)
-    #
-    # etc.
-    # ========================================================
-    for fold in range(num_fold):
-        psi_minus(qc,[q[2*fold+1],q[2*fold+2]])
-    qc.barrier()
-
-
-    # ========================================================
-    # 3. Apply U to every qubit
-    # ========================================================
-    applyU(qc,q)
-    qc.barrier()
-
-
-    # ========================================================
-    # 4. Bell measurement basis transformation
-    #
-    # depth_folded = 3:
-    #   (q0,q1)
-    #
-    # depth_folded = 5:
-    #   (q0,q1), (q2,q3)
-    #
-    # etc.
-    # ========================================================
-    for fold in range(num_fold):
-        qA = q[2 * fold]
-        qB = q[2 * fold + 1]
-        bell_measure(qc, [qA, qB])
-    qc.barrier()
-
-
-    # ========================================================
-    # 5. All Bell measurements
-    # ========================================================
-    for fold in range(num_fold):
-        qA = q[2 * fold]
-        qB = q[2 * fold + 1]
-        c_pair = classical_pairs[fold]
-        qc.measure(qA, c_pair[1])
-        qc.measure(qB, c_pair[0])
-    qc.barrier()
-
-    # ========================================================
-    # 6. Post-processing
-    #
-    # All corrections are applied to the LAST qubit.
-    #
-    # depth_folded = 1:
-    #   no correction
-    #
-    # depth_folded = 3:
-    #   correction from (q0,q1) -> q2
-    #
-    # depth_folded = 5:
-    #   correction from (q0,q1) -> q4
-    #   correction from (q2,q3) -> q4
-    #
-    # depth_folded = 7:
-    #   correction from (q0,q1) -> q6
-    #   correction from (q2,q3) -> q6
-    #   correction from (q4,q5) -> q6
-    #
-    # ========================================================
-    target = q[depth_folded - 1]
-
-    for fold in range(num_fold):
-        apply_correction(
-            qc,
-            classical_pairs[fold],
-            target
-        )
-
-    # ========================================================
-    # 7. Final output measurement
-    # ========================================================
-    qc.measure(target, c_out[0])
-
-
-
-    # ========================================================
-    # Save circuit
-    # ========================================================
-
+    qc.measure(q[0], c[0])
     folded_circuits.append(qc)
-
-    #print(f"\n Depth_folded = {depth_folded}")
-    #qc.draw('mpl')
-    #plt.show()
-
 
 # ============================================================
 # Transpilation
@@ -430,18 +311,23 @@ job = sampler.run(
 
 result = job.result()
 
-# ============================================================
-# Extract final output-qubit probability
-# ============================================================
+all_counts = [
+    result[i].join_data().get_counts()
+    for i in range(len(folded_circuits))
+]
+
 expectation_values = []
-for i in range(len(folded_circuits)):
 
-    out_counts = result[i].data.out.get_counts()
+for counts in all_counts:
 
-    p0 = out_counts.get("0", 0) / shots
-    p1 = out_counts.get("1", 0) / shots
+    p0 = counts.get("0", 0) / shots
+    p1 = counts.get("1", 0) / shots
 
-    expectation_values.append(p0-p1)
+    expectation = p0 - p1
+
+    expectation_values.append(expectation)
+
+
 # ============================================================
 # Print experiment configuration
 # ============================================================
@@ -473,9 +359,9 @@ else:
     else:
         print("Noise: none")
 
-print(f"\nExpectation values of depth_reduced method:\n"
-      f"{[round(x, 5) for x in expectation_values]}")
 
+print(f"\nExpectation values of circuit_folded method:\n"
+      f"{[round(x, 5) for x in expectation_values]}")
 
 # ============================================================
 # Zero-noise extrapolation
