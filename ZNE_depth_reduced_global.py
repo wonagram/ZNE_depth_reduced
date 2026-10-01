@@ -30,14 +30,14 @@ shots = 10**4
 # Depth of the unitary U
 # ============================================================
 
-DEPTH = 5
+DEPTH = 4
 
 
 # ============================================================
 # Number of qubits in U
 # ============================================================
 
-NUM_U_QUBITS = 1
+NUM_U_QUBITS = 2
 
 # ============================================================
 # Circuit drawing
@@ -45,14 +45,14 @@ NUM_U_QUBITS = 1
 # ============================================================
 
 DRAW_CIRCUIT = False
-DRAW_DEPTH_FOLDED = 3
+DRAW_DEPTH_FOLDED = 5
 
 
 # ============================================================
 # Number of foldings
 # ============================================================
 
-depth_folded_circuits = [1, 3, 5, 7, 9, 11]
+depth_folded_circuits = [1, 3, 5, 7]
 
 
 
@@ -64,8 +64,8 @@ depth_folded_circuits = [1, 3, 5, 7, 9, 11]
 
 USE_DEPOLARIZING = True
 USE_AMPLITUDE_DAMPING = False
-USE_PHASE_DAMPING = True
-USE_COHERENT_OVERROTATION = True
+USE_PHASE_DAMPING = False
+USE_COHERENT_OVERROTATION = False
 
 if DRAW_CIRCUIT:
     USE_DEPOLARIZING = False
@@ -424,7 +424,7 @@ for depth_folded in depths_to_build:
     # --------------------------------------------------------
     classical_pairs = []
 
-    for fold in range(num_fold):
+    for fold in reversed(range(num_fold)):
 
         fold_pairs = []
 
