@@ -36,20 +36,20 @@ DEPTH = 3
 # Number of qubits in U
 # ============================================================
 
-NUM_U_QUBITS = 1
+NUM_U_QUBITS = 2
 
 # ============================================================
 # Circuit drawing
 # ============================================================
 
-DRAW_CIRCUIT = False
-DRAW_DEPTH_FOLDED = 3
+DRAW_CIRCUIT = True
+DRAW_DEPTH_FOLDED = 5
 
 # ============================================================
 # Number of foldings
 # ============================================================
 
-depth_folded_circuits = [1, 3, 5, 7, 9, 11]
+depth_folded_circuits = [1, 3, 5, 7]
 
 # ============================================================
 # Noise flags for a simulator
@@ -59,8 +59,8 @@ depth_folded_circuits = [1, 3, 5, 7, 9, 11]
 
 USE_DEPOLARIZING = True
 USE_AMPLITUDE_DAMPING = False
-USE_PHASE_DAMPING = True
-USE_COHERENT_OVERROTATION = True
+USE_PHASE_DAMPING = False
+USE_COHERENT_OVERROTATION = False
 
 if DRAW_CIRCUIT:
     USE_DEPOLARIZING = False
@@ -583,14 +583,20 @@ expectation_values_np = np.array(
 )
 
 
-for degree in [1, 2, 3, 4]:
+for degree in range(
+    1,
+    min(4, len(expectation_values) - 1) + 1,
+):
     coeffs = np.polyfit(
         depth_folded_circuits_np,
         expectation_values_np,
         deg=degree
     )
 
-    zero_noise = np.polyval(coeffs, 0.0)
+    zero_noise = np.polyval(
+        coeffs,
+        0.0
+    )
 
     print(
         f"degree {degree}: "

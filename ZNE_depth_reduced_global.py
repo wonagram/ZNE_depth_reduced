@@ -30,21 +30,21 @@ shots = 10**4
 # Depth of the unitary U
 # ============================================================
 
-DEPTH = 4
+DEPTH = 1
 
 
 # ============================================================
 # Number of qubits in U
 # ============================================================
 
-NUM_U_QUBITS = 2
+NUM_U_QUBITS = 1
 
 # ============================================================
 # Circuit drawing
 # If this flag is turn on, it draws only circuit and exit the code.
 # ============================================================
 
-DRAW_CIRCUIT = False
+DRAW_CIRCUIT = True
 DRAW_DEPTH_FOLDED = 5
 
 
@@ -705,14 +705,20 @@ expectation_values_np = np.array(
 )
 
 
-for degree in [1, 2, 3, 4]:
+for degree in range(
+    1,
+    min(4, len(expectation_values) - 1) + 1,
+):
     coeffs = np.polyfit(
         depth_folded_circuits_np,
         expectation_values_np,
         deg=degree
     )
 
-    zero_noise = np.polyval(coeffs, 0.0)
+    zero_noise = np.polyval(
+        coeffs,
+        0.0
+    )
 
     print(
         f"degree {degree}: "
