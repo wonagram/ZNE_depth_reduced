@@ -5,7 +5,7 @@ from qiskit_aer.noise import (
     phase_damping_error,
     coherent_unitary_error
 )
-from qiskit.quantum_info import Operator
+from qiskit.quantum_info import Operator, Pauli
 from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2 as Sampler
 from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
 from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
@@ -15,22 +15,31 @@ from U_config import *
 from state_preparation import *
 
 # ============================================================
-# Hardware / simulator
-
+# Hardware / simulator / statevector
+#
+# USE_REAL_HARDWARE
 # If you can specify a device. If it is false you use the least busy one.
+#
+# USE_STATEVECTOR
+# True: noiseless statevector simulation; no measurement sampling.
+#       Overrides USE_REAL_HARDWARE and turns off all four noise flags below.
+# False: original shot-based execution, with your hardware/noise settings.
+# Both modes run ALL selected folded circuits and the same extrapolation.
 # ============================================================
 
 USE_REAL_HARDWARE = False
 DEVICE_NAME = False
 # DEVICE_NAME = "ibm_strasbourg"
 
-shots = 10**3
+USE_STATEVECTOR = True
+
+shots = 10**6  # Used only when USE_STATEVECTOR is False.
 
 # ============================================================
 # Depth of the unitary U
 # ============================================================
 
-DEPTH = 18
+DEPTH = 6
 
 # ============================================================
 # Number of qubits in U
@@ -54,15 +63,18 @@ depth_folded_circuits = [1, 3, 5, 7]
 # ============================================================
 # Noise flags for a simulator
 
-# Turn off all noise when drawing circuit
+# Turn off all noise when drawing or using noiseless statevectors.
 # ============================================================
 
-USE_DEPOLARIZING = True
+USE_DEPOLARIZING = False
 USE_AMPLITUDE_DAMPING = False
 USE_PHASE_DAMPING = False
 USE_COHERENT_OVERROTATION = False
 
-if DRAW_CIRCUIT:
+if USE_STATEVECTOR:
+    USE_REAL_HARDWARE = False
+
+if DRAW_CIRCUIT or USE_STATEVECTOR:
     USE_DEPOLARIZING = False
     USE_AMPLITUDE_DAMPING = False
     USE_PHASE_DAMPING = False
@@ -96,25 +108,26 @@ if not 1 <= DEPTH <= len(U_layers):
 # Noise instructions
 # ============================================================
 
-depolarizing_noise_1q = depolarizing_error(
-    depolarizing_strength,
-    1
-).to_instruction()
+if not USE_STATEVECTOR:
+    depolarizing_noise_1q = depolarizing_error(
+        depolarizing_strength,
+        1
+    ).to_instruction()
 
-depolarizing_noise_2q = depolarizing_error(
-    depolarizing_strength,
-    2
-).to_instruction()
+    depolarizing_noise_2q = depolarizing_error(
+        depolarizing_strength,
+        2
+    ).to_instruction()
 
-amplitude_damping_noise = amplitude_damping_error(
-    amplitude_damping_strength,
-    canonical_kraus=False
-).to_instruction()
+    amplitude_damping_noise = amplitude_damping_error(
+        amplitude_damping_strength,
+        canonical_kraus=False
+    ).to_instruction()
 
-phase_damping_noise = phase_damping_error(
-    phase_damping_strength,
-    canonical_kraus=False
-).to_instruction()
+    phase_damping_noise = phase_damping_error(
+        phase_damping_strength,
+        canonical_kraus=False
+    ).to_instruction()
 
 
 # ============================================================
@@ -355,7 +368,16 @@ def applyUdagger(qc, wires):
 # ============================================================
 
 
-if USE_REAL_HARDWARE:
+if USE_STATEVECTOR:
+
+    backend = AerSimulator(
+        method="statevector",
+        precision="double",
+        zero_threshold=0.0,
+        max_parallel_experiments=1,
+    )
+
+elif USE_REAL_HARDWARE:
 
     if not QiskitRuntimeService.saved_accounts():
         raise RuntimeError(
@@ -473,6 +495,29 @@ for depth_folded in depths_to_build:
         raise SystemExit
 
 # ============================================================
+# Select readout for execution
+# ============================================================
+if USE_STATEVECTOR:
+    simulation_circuits = []
+    observable = Pauli("Z" * NUM_U_QUBITS)
+
+    for circuit in folded_circuits:
+        qc_exact = circuit.remove_final_measurements(inplace=False)
+        if any(item.operation.name == "measure" for item in qc_exact.data):
+            raise ValueError(
+                "USE_STATEVECTOR requires a pure-state preparation without "
+                "intermediate measurements."
+            )
+        qc_exact.save_expectation_value(
+            observable,
+            list(range(NUM_U_QUBITS)),
+            label="expectation_value",
+        )
+        simulation_circuits.append(qc_exact)
+else:
+    simulation_circuits = folded_circuits
+
+# ============================================================
 # Transpilation
 # ============================================================
 pm = generate_preset_pass_manager(
@@ -482,56 +527,71 @@ pm = generate_preset_pass_manager(
 
 exec_circuits = [
     pm.run(circuit)
-    for circuit in folded_circuits
+    for circuit in simulation_circuits
 ]
 
-sampler = Sampler(mode=backend)
-
-job = sampler.run(
-    exec_circuits,
-    shots=shots
-)
-
-result = job.result()
-
 # ============================================================
-# Z expectation value for n-qubit output
-#
-# <Z^{\otimes n}> = sum_x (-1)^{|x|} P(x)
+# Run every folded circuit and collect expectations
 # ============================================================
+if USE_STATEVECTOR:
+    # One deterministic state evolution per circuit. There are no noise
+    job = backend.run(exec_circuits, shots=1)
+    result = job.result()
+    if not result.success:
+        raise RuntimeError(f"Statevector simulation failed: {result.status}")
 
-expectation_values = []
+    expectation_values = [
+        float(result.data(i)["expectation_value"])
+        for i in range(len(exec_circuits))
+    ]
+else:
+    sampler = Sampler(mode=backend)
 
-for i in range(len(folded_circuits)):
-
-    counts = result[i].join_data().get_counts()
-
-    total_counts = sum(
-        counts.values()
+    job = sampler.run(
+        exec_circuits,
+        shots=shots
     )
 
-    expectation = 0.0
+    result = job.result()
 
-    for bitstring, count in counts.items():
+    # ============================================================
+    # Z expectation value for n-qubit output
+    #
+    # <Z^{\otimes n}> = sum_x (-1)^{|x|} P(x)
+    # ============================================================
 
-        bitstring = bitstring.replace(
-            " ",
-            ""
+    expectation_values = []
+
+    for i in range(len(folded_circuits)):
+
+        counts = result[i].join_data().get_counts()
+
+        total_counts = sum(
+            counts.values()
         )
 
-        eigenvalue = (
-            (-1) ** bitstring.count("1")
-        )
+        expectation = 0.0
 
-        expectation += (
-            eigenvalue
-            * count
-            / total_counts
-        )
+        for bitstring, count in counts.items():
 
-    expectation_values.append(
-        expectation
-    )
+            bitstring = bitstring.replace(
+                " ",
+                ""
+            )
+
+            eigenvalue = (
+                (-1) ** bitstring.count("1")
+            )
+
+            expectation += (
+                eigenvalue
+                * count
+                / total_counts
+            )
+
+        expectation_values.append(
+            expectation
+        )
 
 
 # ============================================================
@@ -544,7 +604,10 @@ if USE_REAL_HARDWARE:
     print(f"Backend: {backend.name}")
 
 else:
-    print("Backend: AerSimulator")
+    if USE_STATEVECTOR:
+        print("Backend: AerSimulator (statevector)")
+    else:
+        print("Backend: AerSimulator")
 
     active_noises = []
 
@@ -567,7 +630,7 @@ else:
 
 
 print(f"\nExpectation values of circuit_folded method:\n"
-      f"{[round(x, 5) for x in expectation_values]}")
+      f"{[round(x, 12 if USE_STATEVECTOR else 5) for x in expectation_values]}")
 
 # ============================================================
 # Zero-noise extrapolation
@@ -600,5 +663,5 @@ for degree in range(
 
     print(
         f"degree {degree}: "
-        f"{zero_noise:.6f}"
+        f"{zero_noise:.12f}"
     )
