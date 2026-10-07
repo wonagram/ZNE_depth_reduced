@@ -5,7 +5,8 @@ from qiskit_aer.noise import (
     phase_damping_error,
     coherent_unitary_error
 )
-from qiskit.quantum_info import Operator
+from qiskit.quantum_info import Operator, Pauli
+from qiskit.circuit import Gate
 from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2 as Sampler
 from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
 from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
@@ -15,37 +16,45 @@ from U_config import *
 from state_preparation import *
 
 # ============================================================
-# Hardware / simulator
-
+# Hardware / simulator / statevector
+#
+# USE_REAL_HARDWARE
 # If you can specify a device. If it is false you use the least busy one.
+#
+# USE_STATEVECTOR
+# True: noiseless statevector simulation; no measurement sampling.
+#       Overrides USE_REAL_HARDWARE and turns off all four noise flags below.
+# False: original shot-based execution, with your hardware/noise settings.
+# Both modes run ALL selected folded circuits and the same extrapolation.
 # ============================================================
-
 USE_REAL_HARDWARE = False
 DEVICE_NAME = False
 # DEVICE_NAME = "ibm_strasbourg"
 
-shots = 10**4
+USE_STATEVECTOR = True
+
+shots = 10**3  # Used only when USE_STATEVECTOR is False.
+
 
 # ============================================================
 # Depth of the unitary U
 # ============================================================
 
-DEPTH = 1
-
+DEPTH = 6
 
 # ============================================================
 # Number of qubits in U
 # ============================================================
 
-NUM_U_QUBITS = 1
+NUM_U_QUBITS = 2
 
 # ============================================================
 # Circuit drawing
 # If this flag is turn on, it draws only circuit and exit the code.
 # ============================================================
 
-DRAW_CIRCUIT = True
-DRAW_DEPTH_FOLDED = 5
+DRAW_CIRCUIT = False
+DRAW_DEPTH_FOLDED = 3
 
 
 # ============================================================
@@ -59,7 +68,7 @@ depth_folded_circuits = [1, 3, 5, 7]
 # ============================================================
 # Noise flags for a simulator
 
-# Turn off all noise when drawing circuit
+# Turn off all noise when drawing or using noiseless statevector simulation
 # ============================================================
 
 USE_DEPOLARIZING = True
@@ -67,7 +76,10 @@ USE_AMPLITUDE_DAMPING = False
 USE_PHASE_DAMPING = False
 USE_COHERENT_OVERROTATION = False
 
-if DRAW_CIRCUIT:
+if USE_STATEVECTOR:
+    USE_REAL_HARDWARE = False
+
+if DRAW_CIRCUIT or USE_STATEVECTOR:
     USE_DEPOLARIZING = False
     USE_AMPLITUDE_DAMPING = False
     USE_PHASE_DAMPING = False
@@ -370,12 +382,97 @@ def apply_correction(qc, c_pair, target):
     # 11 -> I
     # do nothing
 
+def unitary_initial_preparation(qc):
+    """Keep initial preparation deterministic in no-shot mode.
+
+    A standard initialize(...) on fresh |0> wires is supported: expand its
+    definition and omit only resets on untouched |0> wires. No statevector
+    or density matrix is constructed here. A reset of an already-used wire,
+    measurement, classical feedback or channel in state preparation is
+    rejected rather than silently sampling it. Ordinary unitary gates and
+    composite gates are preserved.
+    """
+    out = qc.copy_empty_like()
+    out.global_phase = qc.global_phase
+    touched = set()
+
+    def append_instruction(operation, wires, clbits):
+        if clbits or getattr(operation, "condition", None) is not None:
+            raise ValueError(
+                "USE_STATEVECTOR requires pure, deterministic input preparation; "
+                "measurements and classical feedback in state_preparation.py "
+                "are not supported."
+            )
+        if operation.name in ("barrier", "delay"):
+            out.append(operation, wires)
+        elif operation.name == "reset":
+            if any(wire in touched for wire in wires):
+                raise ValueError(
+                    "USE_STATEVECTOR cannot reset an already-used input wire. "
+                    "Use unitary pure-state preparation instead."
+                )
+            # All circuit wires start in |0>; this reset has no effect.
+        elif isinstance(operation, Gate):
+            out.append(operation, wires)
+            touched.update(wires)
+        elif operation.name in ("measure", "if_else", "kraus", "superop", "quantum_channel"):
+            raise ValueError(
+                f"{operation.name!r} in input preparation is not supported "
+                "in noiseless, no-shot statevector mode."
+            )
+        else:
+            definition = operation.definition
+            if definition is None:
+                raise ValueError(
+                    f"Cannot certify input instruction {operation.name!r} as "
+                    "deterministic unitary preparation for USE_STATEVECTOR."
+                )
+            out.global_phase += definition.global_phase
+            wire_map = dict(zip(definition.qubits, wires))
+            for item in definition.data:
+                append_instruction(
+                    item.operation,
+                    [wire_map[wire] for wire in item.qubits],
+                    item.clbits,
+                )
+
+    for item in qc.data:
+        append_instruction(item.operation, list(item.qubits), item.clbits)
+    return out
+
+
+def apply_coherent_correction(qc, qA, qB, target):
+    """No-shot equivalent of the ORIGINAL apply_correction(), not a new rule.
+
+    The original measures qA -> c_pair[1], qB -> c_pair[0]. Therefore
+    00 -> XZ, 01 -> Z, 10 -> X, 11 -> I is Z if qA=0, THEN X if qB=0.
+    X conjugation implements quantum controls on |0> rather than |1>.
+    The Bell wires are retained and never reset or measured in this mode.
+    """
+    qc.x(qA)
+    qc.cz(qA, target)
+    qc.x(qA)
+
+    qc.x(qB)
+    qc.cx(qB, target)
+    qc.x(qB)
+
+
 # ============================================================
 # Backend
 # ============================================================
 
 
-if USE_REAL_HARDWARE:
+if USE_STATEVECTOR:
+    backend = AerSimulator(
+        method="statevector",
+        precision="double",
+        zero_threshold=0.0,
+        max_parallel_experiments=1,
+        max_parallel_shots=1,
+    )
+
+elif USE_REAL_HARDWARE:
 
     if not QiskitRuntimeService.saved_accounts():
         raise RuntimeError(
@@ -449,6 +546,8 @@ for depth_folded in depths_to_build:
         qc,
         input_block
     )
+    if USE_STATEVECTOR and not DRAW_CIRCUIT:
+        qc = unitary_initial_preparation(qc)
 
     # ========================================================
     # 2. Prepare psi-minus states
@@ -531,8 +630,11 @@ for depth_folded in depths_to_build:
 
             c_pair = classical_pairs[fold][k]
 
-            qc.measure(qA, c_pair[1])
-            qc.measure(qB, c_pair[0])
+            if not USE_STATEVECTOR or DRAW_CIRCUIT:
+                qc.measure(qA, c_pair[1])
+                qc.measure(qB, c_pair[0])
+            # Statevector: defer BOTH Bell measurements. Their quantum wires
+            # control the equivalent corrections below; no branch is sampled.
     # ========================================================
     # 6. Post-processing
     #
@@ -559,20 +661,41 @@ for depth_folded in depths_to_build:
     for fold in range(num_fold):
 
         for k in range(NUM_U_QUBITS):
-            apply_correction(
-                qc,
-                classical_pairs[fold][k],
-                output_block[k]
-            )
+            if USE_STATEVECTOR and not DRAW_CIRCUIT:
+                pair_block_1 = get_block(q, 2 * fold)
+                pair_block_2 = get_block(q, 2 * fold + 1)
+                apply_coherent_correction(
+                    qc,
+                    pair_block_1[k],  # qA: originally c_pair[1]
+                    pair_block_2[k],  # qB: originally c_pair[0]
+                    output_block[k],
+                )
+            else:
+                apply_correction(
+                    qc,
+                    classical_pairs[fold][k],
+                    output_block[k]
+                )
 
     # ========================================================
     # 7. Final output measurement
     # ========================================================
-    for k in range(NUM_U_QUBITS):
-        qc.measure(
-            output_block[k],
-            c_out[k]
+    if USE_STATEVECTOR and not DRAW_CIRCUIT:
+        # I on the Bell wires, Z on each FINAL output wire.
+        # The joint pure state includes every Bell outcome coherently.
+        # This returns their probability-weighted output expectation without
+        # measurement sampling, branch selection or a density matrix.
+        qc.save_expectation_value(
+            Pauli("Z" * NUM_U_QUBITS),
+            output_block,
+            label="exact_expectation",
         )
+    else:
+        for k in range(NUM_U_QUBITS):
+            qc.measure(
+                output_block[k],
+                c_out[k]
+            )
 
     # ========================================================
     # Save circuit
@@ -611,49 +734,64 @@ exec_circuits = [
     for circuit in folded_circuits
 ]
 
-sampler = Sampler(mode=backend)
+if USE_STATEVECTOR:
+    # All Bell measurements are coherently deferred; there are no measurements,
+    job = backend.run(exec_circuits, shots=1)
+    result = job.result()
+    if not result.success:
+        raise RuntimeError(f"Statevector simulation failed: {result.status}")
 
-job = sampler.run(
-    exec_circuits,
-    shots=shots
-)
+    expectation_values = []
+    for i in range(len(folded_circuits)):
+        expectation = float(np.real(result.data(i)["exact_expectation"]))
+        if not np.isfinite(expectation):
+            raise RuntimeError(f"Non-finite expectation for circuit {i}.")
+        expectation_values.append(expectation)
 
-result = job.result()
+else:
+    sampler = Sampler(mode=backend)
 
-# ============================================================
-# Z expectation value for n-qubit output
-#
-# <Z^{\otimes n}> = sum_{x in {0,1}^n} (-1)^{|x|} P(x)
-#
-# where |x| is the number of 1s in the bitstring x.
-# Therefore:
-#   even number of 1s -> +1
-#   odd  number of 1s -> -1
-# ============================================================
+    job = sampler.run(
+        exec_circuits,
+        shots=shots
+    )
 
-expectation_values = []
+    result = job.result()
 
-for i in range(len(folded_circuits)):
+    # ============================================================
+    # Z expectation value for n-qubit output
+    #
+    # <Z^{\otimes n}> = sum_{x in {0,1}^n} (-1)^{|x|} P(x)
+    #
+    # where |x| is the number of 1s in the bitstring x.
+    # Therefore:
+    #   even number of 1s -> +1
+    #   odd  number of 1s -> -1
+    # ============================================================
 
-    out_counts = result[i].data.out.get_counts()
+    expectation_values = []
 
-    total_counts = sum(out_counts.values())
+    for i in range(len(folded_circuits)):
 
-    expectation = 0.0
+        out_counts = result[i].data.out.get_counts()
 
-    for bitstring, count in out_counts.items():
+        total_counts = sum(out_counts.values())
 
-        # Remove spaces if present
-        bitstring = bitstring.replace(" ", "")
+        expectation = 0.0
 
-        # Eigenvalue of Z^{\otimes n}:
-        # even number of 1s -> +1
-        # odd  number of 1s -> -1
-        eigenvalue = (-1) ** bitstring.count("1")
+        for bitstring, count in out_counts.items():
 
-        expectation += eigenvalue * count / total_counts
+            # Remove spaces if present
+            bitstring = bitstring.replace(" ", "")
 
-    expectation_values.append(expectation)
+            # Eigenvalue of Z^{\otimes n}:
+            # even number of 1s -> +1
+            # odd  number of 1s -> -1
+            eigenvalue = (-1) ** bitstring.count("1")
+
+            expectation += eigenvalue * count / total_counts
+
+        expectation_values.append(expectation)
 
 
 # ============================================================
@@ -662,7 +800,10 @@ for i in range(len(folded_circuits)):
 
 print(f"\nDEPTH = {DEPTH}")
 
-if USE_REAL_HARDWARE:
+if USE_STATEVECTOR:
+    print("Backend: AerSimulator (statevector)")
+
+elif USE_REAL_HARDWARE:
     print(f"Backend: {backend.name}")
 
 else:
@@ -687,8 +828,9 @@ else:
     else:
         print("Noise: none")
 
-print(f"\nExpectation values of depth_reduced method:\n"
-      f"{[round(x, 5) for x in expectation_values]}")
+print("\nExpectation values of global method:")
+for fold_factor, expectation in zip(depths_to_build, expectation_values):
+    print(f"fold factor {fold_factor}: {expectation:.12f}")
 
 
 # ============================================================
@@ -722,5 +864,5 @@ for degree in range(
 
     print(
         f"degree {degree}: "
-        f"{zero_noise:.6f}"
+        f"{zero_noise:.12f}"
     )
