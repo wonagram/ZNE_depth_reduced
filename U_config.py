@@ -186,7 +186,6 @@ U_GATES = {
         [
             ("x", 0, theta_x1),
             ("x", 1, theta_x1),
-            ("x", 2, theta_x1),
         ],
 
         # Layer 2
@@ -201,7 +200,6 @@ U_GATES = {
 
         # Layer 4
         [
-            ("y", 0, theta_y1),
             ("y", 1, theta_y1),
             ("y", 2, theta_y1),
         ],
@@ -219,7 +217,6 @@ U_GATES = {
         # Layer 7
         [
             ("z", 0, theta_z1),
-            ("z", 1, theta_z1),
             ("z", 2, theta_z1),
         ],
 
@@ -237,7 +234,6 @@ U_GATES = {
         [
             ("x", 0, theta_x2),
             ("x", 1, theta_x2),
-            ("x", 2, theta_x2),
         ],
 
         # Layer 11
@@ -252,7 +248,6 @@ U_GATES = {
 
         # Layer 13
         [
-            ("y", 0, theta_y2),
             ("y", 1, theta_y2),
             ("y", 2, theta_y2),
         ],
@@ -270,7 +265,6 @@ U_GATES = {
         # Layer 16
         [
             ("z", 0, theta_z2),
-            ("z", 1, theta_z2),
             ("z", 2, theta_z2),
         ],
 
