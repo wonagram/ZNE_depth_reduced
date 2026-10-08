@@ -1,6 +1,8 @@
 """Local depth-reduced folding with intermediate correction and qubit reuse.
 
-One user-declared depth-one layer is one component G_i. For each component:
+One selected logical component is one component G_i.  A component may be a
+truncated or complete macro gate whose counted U depth is one or three.  For
+each component:
 prepare singlets -> all copies -> all Bell measurements -> Pauli corrections
 -> reset measured wires -> next component. No live logical state is reset.
 
@@ -112,7 +114,43 @@ def _clean_layers(layers, n):
     return result
 
 
-def make_local_plan(num_qubits, layers, fold_factor, *, reuse_pattern="snake",
+def _component_active(component, n):
+    """Return active logical qubits for a new SelectedComponent-like object."""
+    gates = getattr(component, "gates", None)
+    if gates is None:
+        raise ValueError("A generalized component must expose a .gates sequence.")
+    occupied = set()
+    for gate in gates:
+        qubits = tuple(getattr(gate, "qubits", ()))
+        if not qubits:
+            raise ValueError(f"Component contains an invalid logical gate: {gate!r}")
+        if any(isinstance(q, bool) or not isinstance(q, Integral) or not 0 <= q < n
+               for q in qubits):
+            raise ValueError(f"Invalid logical qubit in gate {gate!r}.")
+        if len(set(qubits)) != len(qubits):
+            raise ValueError(f"Repeated logical qubit in gate {gate!r}.")
+        if occupied.intersection(qubits):
+            raise ValueError(
+                "A local-folding component contains horizontally overlapping gates. "
+                "Split overlapping gates into separate U-config components."
+            )
+        occupied.update(qubits)
+    return sorted(occupied)
+
+
+def _normalize_components(components, n):
+    """Accept both historical tuple layers and generalized macro components."""
+    result = []
+    for item in components:
+        if hasattr(item, "gates") and hasattr(item, "included_depth"):
+            result.append((item, None, _component_active(item, n)))
+        else:
+            legacy_gates, active = _clean_layers([item], n)[0]
+            result.append((None, legacy_gates, active))
+    return result
+
+
+def make_local_plan(num_qubits, components, fold_factor, *, reuse_pattern="snake",
                     qubit_assignment="fixed", input_placement="front"):
     """Plan all 2 x 2 x 2 placement/assignment/routing combinations.
 
@@ -135,8 +173,8 @@ def make_local_plan(num_qubits, layers, fold_factor, *, reuse_pattern="snake",
     """
     if isinstance(num_qubits, bool) or not isinstance(num_qubits, Integral):
         raise ValueError("num_qubits must be an integer.")
-    if not 1 <= num_qubits <= 4:
-        raise ValueError("This implementation supports 1-4 logical qubits.")
+    if not 1 <= num_qubits <= 5:
+        raise ValueError("This implementation supports 1-5 logical qubits.")
     if (isinstance(fold_factor, bool) or not isinstance(fold_factor, Integral)
             or fold_factor < 1 or fold_factor % 2 != 1):
         raise ValueError("fold_factor must be a positive odd integer.")
@@ -149,7 +187,7 @@ def make_local_plan(num_qubits, layers, fold_factor, *, reuse_pattern="snake",
 
     n, factor = int(num_qubits), int(fold_factor)
     folds, physical = (factor - 1) // 2, n * factor
-    validated_layers = _clean_layers(layers, n)
+    validated_components = _normalize_components(components, n)
     front = input_placement == 'front'
     input_ids = list(range(n)) if front else [None] * n
     current_wire = input_ids.copy()
@@ -177,7 +215,7 @@ def make_local_plan(num_qubits, layers, fold_factor, *, reuse_pattern="snake",
         if frontier > physical:
             raise AssertionError('Input placement exceeded n*fold_factor.')
 
-    for j, (gates, active) in enumerate(validated_layers):
+    for j, (component, gates, active) in enumerate(validated_components):
         newly_used = [k for k in active if k not in seen]
         place_inputs(newly_used)
         for k in newly_used:
@@ -242,7 +280,8 @@ def make_local_plan(num_qubits, layers, fold_factor, *, reuse_pattern="snake",
         measured = [wire for i in stage_events
                     for wire in (events[i]['source'], events[i]['middle'])]
         stages.append({
-            'inputs_before_layer': before, 'gates': gates, 'active': active,
+            'inputs_before_layer': before, 'component': component,
+            'gates': gates, 'active': active,
             'blocks': blocks, 'events': stage_events,
             'outputs_after_layer': current_wire.copy(),
             'workspace': workspace, 'reset_ids': measured,
@@ -297,7 +336,10 @@ def _validate_local_plan(plan):
     next_event, pairs = 0, []
     for j, stage in enumerate(plan['stages']):
         active, blocks = stage['active'], stage['blocks']
-        _, expected_active = _clean_layers([stage['gates']], n)[0]
+        if stage.get('component') is not None:
+            expected_active = _component_active(stage['component'], n)
+        else:
+            _, expected_active = _clean_layers([stage['gates']], n)[0]
         if active != expected_active:
             raise ValueError(f'G{j+1}: active logical qubits do not match its gates.')
         new = [k for k in active if k not in seen]
@@ -409,9 +451,9 @@ def _default_correction(qc, register, target):
         qc.x(target)
 
 def build_intermediate_local_circuit(
-    plan, *, prepare_initial_state, apply_rotation, apply_noise,
-    psi_minus, bell_measure, apply_correction=None, use_noise=False,
-    stage_barriers=True,
+    plan, *, prepare_initial_state, apply_component=None,
+    apply_rotation=None, apply_noise=None, psi_minus, bell_measure,
+    apply_correction=None, use_noise=False, stage_barriers=True,
 ):
     """Build the full dynamic circuit, including resets and final readout.
 
@@ -458,24 +500,38 @@ def build_intermediate_local_circuit(
         # 2. Copy parity is LOGICAL copy parity, not physical wire number.
         #    This is essential when the module travels upward.
         for block_index, block in enumerate(stage['blocks']):
-            dressed = block_index % 2 == 1
-            for kind, first, last in stage['gates']:
-                if kind in ('x', 'y', 'z'):
-                    target = q[block[first]]
-                    apply_rotation(qc, target, kind, last)
-                    if use_noise:
-                        apply_noise(qc, [target], kind)
-                else:
-                    control, target = q[block[first]], q[block[last]]
-                    if dressed:
-                        qc.y(control)
-                        qc.y(target)
-                    qc.cx(control, target)
-                    if use_noise:
-                        apply_noise(qc, [control, target], 'cx')
-                    if dressed:
-                        qc.y(control)
-                        qc.y(target)
+            if stage.get('component') is not None:
+                if apply_component is None:
+                    raise ValueError(
+                        "A generalized U-config component requires apply_component."
+                    )
+                mapped = {logical: q[block[logical]] for logical in stage['active']}
+                apply_component(
+                    qc, mapped, stage['component'], block_index, use_noise
+                )
+            else:
+                if apply_rotation is None or apply_noise is None:
+                    raise ValueError(
+                        "Legacy tuple layers require apply_rotation and apply_noise."
+                    )
+                dressed = block_index % 2 == 1
+                for kind, first, last in stage['gates']:
+                    if kind in ('x', 'y', 'z'):
+                        target = q[block[first]]
+                        apply_rotation(qc, target, kind, last)
+                        if use_noise:
+                            apply_noise(qc, [target], kind)
+                    else:
+                        control, target = q[block[first]], q[block[last]]
+                        if dressed:
+                            qc.y(control)
+                            qc.y(target)
+                        qc.cx(control, target)
+                        if use_noise:
+                            apply_noise(qc, [control, target], 'cx')
+                        if dressed:
+                            qc.y(control)
+                            qc.y(target)
 
         # 3. Complete all Bell-basis changes before starting measurement.
         if stage_barriers and stage['events']:
@@ -518,7 +574,7 @@ def build_intermediate_local_circuit(
         qc.measure(q[physical], c_out[k])
     qc.metadata = dict(qc.metadata or {})
     qc.metadata['intermediate_local_folding'] = {
-        'version': 4, 'qubit_reuse': True,
+        'version': 5, 'qubit_reuse': True,
         'input_placement': plan['input_placement'], 'input_ids': plan['input_ids'].copy(),
         'qubit_assignment': plan['qubit_assignment'],
         'prep_end': prep_end, 'stages': stage_records,
@@ -540,7 +596,19 @@ def describe_local_plan(plan):
     print(f"Bell links: {m}; possible full Bell histories: {4 ** m}")
     print('Output map (logical -> physical):', dict(enumerate(plan['output_ids'])))
     for j, stage in enumerate(plan['stages']):
-        print(f"  G{j + 1}: active={stage['active']}, "
+        component = stage.get('component')
+        if component is not None:
+            print(
+                f"  G{j + 1}: {getattr(component, 'label', 'component')} "
+                f"[selected depth {getattr(component, 'included_depth', '?')}/"
+                f"{getattr(component, 'full_depth', '?')}], "
+                f"active={stage['active']}, "
+                f"directions={stage['directions']}, "
+                f"corrected outputs={stage['outputs_after_layer']}, "
+                f"reset={stage['reset_ids']}"
+            )
+        else:
+            print(f"  G{j + 1}: active={stage['active']}, "
               f"directions={stage['directions']}, "
               f"corrected outputs={stage['outputs_after_layer']}, "
               f"reset={stage['reset_ids']}")
@@ -672,8 +740,8 @@ def _condition_holds(memory, guards):
     return True
 
 def check_intermediate_local_folding(
-    qc, plan, *, prepare_initial_state, max_physical_qubits=20,
-    max_branches=4096, print_each=True, atol=1e-9,
+    qc, plan, *, prepare_initial_state, component_matrix=None,
+    max_physical_qubits=20, max_branches=4096, print_each=True, atol=1e-9,
 ):
     """Exhaustive noiseless check of the ACTUAL dynamic circuit before readout.
 
@@ -719,7 +787,7 @@ def check_intermediate_local_folding(
         raise ValueError('Too many measurement levels for exhaustive recursive checking. '
                          'Reduce DEPTH/fold factor. No sampling has been substituted.')
     meta = (qc.metadata or {}).get('intermediate_local_folding')
-    if not meta or meta.get('version') != 4 or not meta.get('qubit_reuse'):
+    if not meta or meta.get('version') not in (4, 5) or not meta.get('qubit_reuse'):
         raise ValueError('Use the untranspiled circuit returned by the intermediate builder.')
     if (meta.get('qubit_assignment') != plan['qubit_assignment']
             or meta.get('reuse_pattern') != plan['reuse_pattern']
@@ -741,7 +809,16 @@ def check_intermediate_local_folding(
     target = initial.copy()
     total_u = np.eye(1 << n, dtype=complex)
     for stage in plan['stages']:
-        layer_u = _layer_matrix(stage['gates'], n)
+        if stage.get('component') is not None:
+            if component_matrix is None:
+                raise ValueError(
+                    "Generalized components require component_matrix for CHECK_CODE."
+                )
+            layer_u = np.asarray(component_matrix(stage['component'], n), dtype=complex)
+            if layer_u.shape != (1 << n, 1 << n):
+                raise ValueError("component_matrix returned the wrong matrix size.")
+        else:
+            layer_u = _layer_matrix(stage['gates'], n)
         total_u = layer_u @ total_u
         target = layer_u @ target
         ideal_targets.append(target.copy())
