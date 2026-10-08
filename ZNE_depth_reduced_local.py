@@ -1,18 +1,22 @@
 from qiskit_aer import AerSimulator
-from qiskit_aer.noise import (
-    depolarizing_error,
-    amplitude_damping_error,
-    phase_damping_error,
-    coherent_unitary_error
-)
-
-from qiskit.quantum_info import Operator, Pauli
+from qiskit.quantum_info import Pauli
 from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2 as Sampler
 from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
 from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister, transpile
 import numpy as np
 import matplotlib.pyplot as plt
-from U_config import *
+
+from U_config import (
+    get_unitary_max_depth,
+    normalize_unitary_type,
+    select_unitary_components,
+    selected_unitary_summary,
+)
+from unitary_tools import (
+    NoiseController,
+    append_local_component_copy,
+    selected_component_matrix,
+)
 from state_preparation import *
 
 from local_folding_helpers import (
@@ -24,95 +28,73 @@ from local_folding_helpers import (
 
 # ============================================================
 # Hardware / simulator / statevector
-#
-# USE_REAL_HARDWARE
-# If you can specify a device. If it is false you use the least busy one.
-#
-# USE_STATEVECTOR
-# True: noiseless statevector simulation; no measurement sampling.
-#       Overrides USE_REAL_HARDWARE and turns off all four noise flags below.
-# False: original shot-based execution, with your hardware/noise settings.
-# Both modes run ALL selected folded circuits and the same extrapolation.
 # ============================================================
 USE_REAL_HARDWARE = False
 DEVICE_NAME = False
 # DEVICE_NAME = "ibm_strasbourg"
 
-USE_STATEVECTOR = True
-
+USE_STATEVECTOR = False
 shots = 10**3  # Used only when USE_STATEVECTOR is False.
 
-
 # ============================================================
-# Depth of the unitary U
+# Unitary selection, counted depth, and logical-qubit count
+# Available UNITARY_TYPE values:
+#   random_type, hea_cz, hea_crx, hea_crz, hea_rzz,
+#   qaoa_ising, qaoa_xy, clifford_only
 # ============================================================
-
-DEPTH = 6
-
-
-# ============================================================
-# Number of qubits in U
-# ============================================================
-
+UNITARY_TYPE = "qaoa"
+DEPTH = 31
 NUM_U_QUBITS = 2
 
 # Physical pool = NUM_U_QUBITS * fold factor, independent of DEPTH.
-# "fixed": permanent lanes (original r*n+k in front input placement).
-# "dynamic": all currently free/reset workspace is shared between logical qubits.
+# "fixed": permanent lanes. "dynamic": shared free/reset workspace.
 QUBIT_ASSIGNMENT = "dynamic"
 
-# "front": input state on q0,...,q(n-1), preserving the previous four modes.
-# "first_use": spatial input placement follows first use by a component.
-# The full (possibly entangled) input is still prepared once at the start.
+# "front": input state on q0,...,q(n-1).
+# "first_use": spatial placement follows first component use.
 INPUT_PLACEMENT = "first_use"
 
-# "snake": fixed lanes reverse per use; dynamic blocks alternate down/up.
-# "cycle": fixed lanes wrap; dynamic workspace restarts at the top each time.
+# "snake": alternating directions. "cycle": restart from the top.
 REUSE_PATTERN = "cycle"
 
 # ============================================================
 # Circuit drawing
-# If this flag is turn on, it draws only circuit and exit the code.
 # ============================================================
-
 DRAW_CIRCUIT = False
 DRAW_DEPTH_FOLDED = 3
 
 # ============================================================
 # Exact, noiseless branch checking
 # ============================================================
-
 CHECK_CODE = False
 CHECK_DEPTH_FOLDED = 3
-
 CHECK_MAX_PHYSICAL_QUBITS = 20
 CHECK_MAX_BRANCHES = 4096
 CHECK_PRINT_EACH = True
 
-
-
-# Configurable guard against accidentally constructing an
-# impractically wide circuit for ordinary local simulation.
+# Guard against accidentally constructing an impractically wide simulator job.
 MAX_SIMULATOR_PHYSICAL_QUBITS = 24
 
 # ============================================================
 # Number of foldings
 # ============================================================
-
 depth_folded_circuits = [1, 3, 5, 7]
 
-
-
 # ============================================================
-# Noise flags for a simulator
-
-# Disable all noise for statevector execution, drawing, or exact checking.
+# Noise flags and strengths
 # ============================================================
-
 USE_DEPOLARIZING = True
 USE_AMPLITUDE_DAMPING = False
 USE_PHASE_DAMPING = False
 USE_COHERENT_OVERROTATION = False
+
+depolarizing_strength = 0.02
+amplitude_damping_strength = 0.02
+phase_damping_strength = 0.02
+overrotation_epsilon = 0.02
+
+if USE_STATEVECTOR:
+    USE_REAL_HARDWARE = False
 
 if USE_STATEVECTOR or DRAW_CIRCUIT or CHECK_CODE:
     USE_DEPOLARIZING = False
@@ -121,267 +103,40 @@ if USE_STATEVECTOR or DRAW_CIRCUIT or CHECK_CODE:
     USE_COHERENT_OVERROTATION = False
 
 # ============================================================
-# Noise parameters for a simulator
+# Select the exact counted-depth prefix.
+# A cut RXX/RYY/RZZ prefix remains one atomic local component.
 # ============================================================
+UNITARY_TYPE = normalize_unitary_type(UNITARY_TYPE)
+SELECTED_COMPONENTS = select_unitary_components(
+    UNITARY_TYPE,
+    NUM_U_QUBITS,
+    DEPTH,
+)
+MAX_U_DEPTH = get_unitary_max_depth(UNITARY_TYPE, NUM_U_QUBITS)
 
-depolarizing_strength = 0.02
-amplitude_damping_strength = 0.02
-phase_damping_strength = 0.02
+NOISE_CONTROLLER = NoiseController(
+    use_depolarizing=USE_DEPOLARIZING,
+    use_amplitude_damping=USE_AMPLITUDE_DAMPING,
+    use_phase_damping=USE_PHASE_DAMPING,
+    use_coherent_overrotation=USE_COHERENT_OVERROTATION,
+    depolarizing_strength=depolarizing_strength,
+    amplitude_damping_strength=amplitude_damping_strength,
+    phase_damping_strength=phase_damping_strength,
+    overrotation_epsilon=overrotation_epsilon,
+)
 
-# coherent over-rotation angle
-overrotation_epsilon = 0.02
 
-
-if NUM_U_QUBITS not in U_GATES:
-    raise ValueError(
-        f"Unsupported NUM_U_QUBITS = {NUM_U_QUBITS}"
+def apply_selected_component(qc, mapped_wires, component, block_index, use_noise):
+    """Fold the complete selected component, not its decomposition pieces."""
+    append_local_component_copy(
+        qc,
+        mapped_wires,
+        component,
+        block_index=block_index,
+        noise_controller=NOISE_CONTROLLER,
+        use_noise=use_noise,
     )
 
-U_layers = U_GATES[NUM_U_QUBITS]
-if not 1 <= DEPTH <= len(U_layers):
-    raise ValueError(
-        f"DEPTH must be between 1 and {len(U_layers)}, got {DEPTH}."
-    )
-
-# ============================================================
-# Noise instructions
-# ============================================================
-
-depolarizing_noise_1q = depolarizing_error(
-    depolarizing_strength,
-    1
-).to_instruction()
-
-depolarizing_noise_2q = depolarizing_error(
-    depolarizing_strength,
-    2
-).to_instruction()
-
-amplitude_damping_noise = amplitude_damping_error(
-    amplitude_damping_strength,
-    canonical_kraus=False
-).to_instruction()
-
-phase_damping_noise = phase_damping_error(
-    phase_damping_strength,
-    canonical_kraus=False
-).to_instruction()
-
-# ============================================================
-# Apply selected noise channels
-# ============================================================
-
-def apply_noise(qc, wires, gate_type):
-
-    # ========================================================
-    # 1-qubit gate noise
-    # ========================================================
-
-    if gate_type in ["x", "y", "z"]:
-
-        wire = wires[0]
-
-        if USE_DEPOLARIZING:
-            qc.append(
-                depolarizing_noise_1q,
-                [wire]
-            )
-
-        if USE_AMPLITUDE_DAMPING:
-            qc.append(
-                amplitude_damping_noise,
-                [wire]
-            )
-
-        if USE_PHASE_DAMPING:
-            qc.append(
-                phase_damping_noise,
-                [wire]
-            )
-
-        if USE_COHERENT_OVERROTATION:
-
-            error_circuit = QuantumCircuit(1)
-
-            if gate_type == "x":
-                error_circuit.rx(overrotation_epsilon, 0)
-
-            elif gate_type == "y":
-                error_circuit.ry(overrotation_epsilon, 0)
-
-            elif gate_type == "z":
-                error_circuit.rz(overrotation_epsilon, 0)
-
-            coherent_noise = coherent_unitary_error(
-                Operator(error_circuit)
-            ).to_instruction()
-
-            qc.append(
-                coherent_noise,
-                [wire]
-            )
-
-
-    # ========================================================
-    # 2-qubit CNOT noise
-    # ========================================================
-
-    elif gate_type == "cx":
-
-        control = wires[0]
-        target = wires[1]
-
-        # ----------------------------------------------------
-        # 2-qubit depolarizing noise
-        # ----------------------------------------------------
-        if USE_DEPOLARIZING:
-            qc.append(
-                depolarizing_noise_2q,
-                [control, target]
-            )
-
-        # ----------------------------------------------------
-        # Independent amplitude damping on both qubits
-        # ----------------------------------------------------
-        if USE_AMPLITUDE_DAMPING:
-            qc.append(
-                amplitude_damping_noise,
-                [control]
-            )
-
-            qc.append(
-                amplitude_damping_noise,
-                [target]
-            )
-
-        # ----------------------------------------------------
-        # Independent phase damping on both qubits
-        # ----------------------------------------------------
-        if USE_PHASE_DAMPING:
-            qc.append(
-                phase_damping_noise,
-                [control]
-            )
-
-            qc.append(
-                phase_damping_noise,
-                [target]
-            )
-
-def apply_rotation(qc, wire, axis, angle):
-
-    if axis == "x":
-        qc.rx(angle, wire)
-
-    elif axis == "y":
-        qc.ry(angle, wire)
-
-    elif axis == "z":
-        qc.rz(angle, wire)
-
-
-def applyU(qc, wires, block_index):
-
-    U_layers = U_GATES[NUM_U_QUBITS]
-
-    if not 1 <= DEPTH <= len(U_layers):
-        raise ValueError(
-            f"DEPTH must be between 1 and {len(U_layers)}, got {DEPTH}."
-        )
-
-    # Python block_index:
-    # 0 -> block 1 : normal U
-    # 1 -> block 2 : YY around every CNOT
-    # 2 -> block 3 : normal U
-    # 3 -> block 4 : YY around every CNOT
-    is_even_block = (block_index % 2 == 1)
-
-    for layer in U_layers[:DEPTH]:
-
-        for gate in layer:
-
-            gate_type = gate[0]
-
-            # ====================================================
-            # Single-qubit rotation
-            # ====================================================
-            if gate_type in ["x", "y", "z"]:
-
-                _, local_qubit, theta = gate
-
-                wire = wires[local_qubit]
-
-                apply_rotation(
-                    qc,
-                    wire,
-                    gate_type,
-                    theta
-                )
-
-                if not USE_REAL_HARDWARE:
-                    apply_noise(
-                        qc,
-                        [wire],
-                        gate_type
-                    )
-
-            # ====================================================
-            # CNOT
-            # ====================================================
-            elif gate_type == "cx":
-
-                _, control, target = gate
-
-                control_wire = wires[control]
-                target_wire = wires[target]
-
-                # ------------------------------------------------
-                # Even logical block:
-                #
-                # (Y x Y) CNOT (Y x Y)
-                # ------------------------------------------------
-                if is_even_block:
-
-                    qc.y(control_wire)
-                    qc.y(target_wire)
-
-                # CNOT
-                qc.cx(
-                    control_wire,
-                    target_wire
-                )
-
-                if not USE_REAL_HARDWARE:
-                    apply_noise(
-                        qc,
-                        [control_wire, target_wire],
-                        "cx"
-                    )
-
-                # ------------------------------------------------
-                # Even logical block:
-                # second Y x Y
-                # ------------------------------------------------
-                if is_even_block:
-
-                    qc.y(control_wire)
-                    qc.y(target_wire)
-
-            else:
-                raise ValueError(
-                    f"Unknown gate type: {gate_type}"
-                )
-
-
-def get_block(q, block_index):
-
-    start = block_index * NUM_U_QUBITS
-    end = start + NUM_U_QUBITS
-
-    return [
-        q[i]
-        for i in range(start, end)
-    ]
 
 def psi_minus(qc, wires):
     qc.h(wires[0])
@@ -389,9 +144,11 @@ def psi_minus(qc, wires):
     qc.z(wires[0])
     qc.x(wires[1])
 
+
 def bell_measure(qc, wires):
     qc.cx(wires[0], wires[1])
     qc.h(wires[0])
+
 
 def apply_correction(qc, c_pair, target):
     """
@@ -401,22 +158,13 @@ def apply_correction(qc, c_pair, target):
         10 -> X
         11 -> I
     """
-    # 00 -> XZ
     with qc.if_test((c_pair, 0)):
         qc.z(target)
         qc.x(target)
-
-    # 01 -> Z
     with qc.if_test((c_pair, 1)):
         qc.z(target)
-
-    # 10 -> X
     with qc.if_test((c_pair, 2)):
         qc.x(target)
-
-    # 11 -> I
-    # do nothing
-
 
 # ============================================================
 # Noiseless statevector execution with intermediate qubit reuse
@@ -722,7 +470,7 @@ for depth_folded in depths_to_build:
     # --------------------------------------------------------
     plan = make_local_plan(
         NUM_U_QUBITS,
-        U_layers[:DEPTH],
+        SELECTED_COMPONENTS,
         depth_folded,
         reuse_pattern=REUSE_PATTERN,
         qubit_assignment=QUBIT_ASSIGNMENT,
@@ -753,8 +501,7 @@ for depth_folded in depths_to_build:
     qc = build_intermediate_local_circuit(
         plan,
         prepare_initial_state=prepare_initial_state,
-        apply_rotation=apply_rotation,
-        apply_noise=apply_noise,
+        apply_component=apply_selected_component,
         psi_minus=psi_minus,
         bell_measure=bell_measure,
         apply_correction=apply_correction,
@@ -778,6 +525,7 @@ for depth_folded in depths_to_build:
             qc,
             plan,
             prepare_initial_state=prepare_initial_state,
+            component_matrix=selected_component_matrix,
             max_physical_qubits=CHECK_MAX_PHYSICAL_QUBITS,
             max_branches=CHECK_MAX_BRANCHES,
             print_each=CHECK_PRINT_EACH,
@@ -916,7 +664,9 @@ else:
 # Print experiment configuration
 # ============================================================
 
-print(f"\nDEPTH = {DEPTH}")
+print(f"\nUNITARY_TYPE = {UNITARY_TYPE}")
+print(selected_unitary_summary(UNITARY_TYPE, NUM_U_QUBITS, DEPTH))
+print(f"DEPTH = {DEPTH}; maximum configured depth = {MAX_U_DEPTH}")
 
 if USE_REAL_HARDWARE:
     print(f"Backend: {backend.name}")
@@ -946,8 +696,9 @@ else:
     else:
         print("Noise: none")
 
-print("\nExpectation values of local method:\n["
-      + ", ".join(f"{x:.12f}" for x in expectation_values) + "]")
+precision = 12 if USE_STATEVECTOR else 4
+print("\nExpectation values of local method:")
+print("[" + ", ".join(f"{x:.{precision}f}" for x in expectation_values) + "]")
 
 
 # ============================================================
@@ -978,5 +729,5 @@ for degree in range(
 
     print(
         f"degree {degree}: "
-        f"{zero_noise:.12f}"
+        f"{zero_noise:.{precision}f}"
     )
