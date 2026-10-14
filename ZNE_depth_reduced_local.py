@@ -15,6 +15,7 @@ from U_config import (
 from unitary_tools import (
     NoiseController,
     append_local_component_copy,
+    make_fake_aer_backend,
     selected_component_matrix,
 )
 from state_preparation import *
@@ -27,23 +28,48 @@ from local_folding_helpers import (
 )
 
 # ============================================================
-# Hardware / simulator / statevector
+# Hardware / simulator / statevector / fake backend
 # ============================================================
 USE_REAL_HARDWARE = False
 DEVICE_NAME = False
 # DEVICE_NAME = "ibm_strasbourg"
 
 USE_STATEVECTOR = False
-shots = 10**3  # Used only when USE_STATEVECTOR is False.
+
+# Fake-backend mode uses an IBM fake-device snapshot to configure Aer.
+# The fake snapshot supplies the noise model, so custom noise below is disabled.
+# Aer executes the dynamic circuit, including mid-circuit measurements and if_test.
+USE_FAKE_BACKEND = True
+FAKE_BACKEND_NAME = "FakeQuebec"
+# Common fake-backend class names, depending on qiskit-ibm-runtime version:
+#   FakeSherbrooke, FakeBrisbane, FakeKyiv, FakeKyoto, FakeOsaka,
+#   FakeQuebec, FakeStrasbourg, FakeTorino, FakeBrussels, FakeKawasaki,
+#   FakeCusco, FakeFez, FakeMarrakesh, FakeAachen, FakeBerlin,
+#   FakeBoston, FakeKingston, FakeMiami, FakePittsburgh
+#   FakeFractionalBackend explicitly models control flow, but has only 5 qubits.
+
+shots = 10**3  # Used by shot-based simulator/fake/hardware; ignored by statevector.
+
+_backend_modes = {
+    "USE_REAL_HARDWARE": USE_REAL_HARDWARE,
+    "USE_STATEVECTOR": USE_STATEVECTOR,
+    "USE_FAKE_BACKEND": USE_FAKE_BACKEND,
+}
+_enabled_backend_modes = [name for name, enabled in _backend_modes.items() if enabled]
+if len(_enabled_backend_modes) > 1:
+    raise ValueError(
+        "Choose only one backend mode. Multiple flags are True: "
+        + ", ".join(_enabled_backend_modes)
+    )
 
 # ============================================================
 # Unitary selection, counted depth, and logical-qubit count
 # Available UNITARY_TYPE values:
 #   random_type, hea_cz, hea_crx, hea_crz, hea_rzz,
-#   qaoa_ising, qaoa_xy, clifford_only
+#   qaoa, qaoa_xy, clifford_only
 # ============================================================
-UNITARY_TYPE = "qaoa"
-DEPTH = 31
+UNITARY_TYPE = "random_type"
+DEPTH = 18
 NUM_U_QUBITS = 2
 
 # Physical pool = NUM_U_QUBITS * fold factor, independent of DEPTH.
@@ -60,7 +86,7 @@ REUSE_PATTERN = "cycle"
 # ============================================================
 # Circuit drawing
 # ============================================================
-DRAW_CIRCUIT = False
+DRAW_CIRCUIT = True
 DRAW_DEPTH_FOLDED = 3
 
 # ============================================================
@@ -93,18 +119,17 @@ amplitude_damping_strength = 0.02
 phase_damping_strength = 0.02
 overrotation_epsilon = 0.02
 
-if USE_STATEVECTOR:
-    USE_REAL_HARDWARE = False
-
-if USE_STATEVECTOR or DRAW_CIRCUIT or CHECK_CODE:
+if USE_STATEVECTOR or USE_FAKE_BACKEND or DRAW_CIRCUIT or CHECK_CODE:
     USE_DEPOLARIZING = False
     USE_AMPLITUDE_DAMPING = False
     USE_PHASE_DAMPING = False
     USE_COHERENT_OVERROTATION = False
 
 # ============================================================
-# Select the exact counted-depth prefix.
-# A cut RXX/RYY/RZZ prefix remains one atomic local component.
+# Select the exact PHYSICAL-depth prefix.
+# IMPORTANT FOR LOCAL FOLDING:
+# A full or cut CZ/CRZ/CRX/RZZ/RXX/RYY macro remains ONE atomic G_i.
+# Its decomposition slices determine DEPTH, but they are never separate local-folding G_i.
 # ============================================================
 UNITARY_TYPE = normalize_unitary_type(UNITARY_TYPE)
 SELECTED_COMPONENTS = select_unitary_components(
@@ -127,7 +152,12 @@ NOISE_CONTROLLER = NoiseController(
 
 
 def apply_selected_component(qc, mapped_wires, component, block_index, use_noise):
-    """Fold the complete selected component, not its decomposition pieces."""
+    """Apply one WHOLE logical macro to one copied block.
+
+    Example: one CZ component emits H-CX-H here before the helper performs
+    that component's Bell measurements.  RYY similarly emits all five
+    physical-depth slices as one G_i.  A DEPTH-cut prefix is also one G_i.
+    """
     append_local_component_copy(
         qc,
         mapped_wires,
@@ -136,6 +166,28 @@ def apply_selected_component(qc, mapped_wires, component, block_index, use_noise
         noise_controller=NOISE_CONTROLLER,
         use_noise=use_noise,
     )
+
+
+def assert_atomic_local_plan(plan, selected_components):
+    """Prevent decomposition slices from becoming separate local-folding stages."""
+    stages = plan.get("stages", [])
+    if len(stages) != len(selected_components):
+        raise ValueError(
+            "Local folding must create exactly one G_i per selected logical "
+            f"component, but got {len(stages)} stages for "
+            f"{len(selected_components)} components. Decomposition slices must "
+            "not be planned as separate local-folding gates."
+        )
+
+    for index, (stage, expected) in enumerate(zip(stages, selected_components), start=1):
+        actual = stage.get("component")
+        if actual != expected:
+            raise ValueError(
+                f"G{index} does not contain the original selected macro component. "
+                "Keep CZ/CRZ/CRX/RZZ/RXX/RYY decompositions atomic in local folding."
+            )
+        if getattr(actual, "included_depth", None) != getattr(expected, "included_depth", None):
+            raise ValueError(f"G{index} lost the selected macro-prefix depth.")
 
 
 def psi_minus(qc, wires):
@@ -476,6 +528,7 @@ for depth_folded in depths_to_build:
         qubit_assignment=QUBIT_ASSIGNMENT,
         input_placement=INPUT_PLACEMENT,
     )
+    assert_atomic_local_plan(plan, SELECTED_COMPONENTS)
     describe_local_plan(plan)
 
     if (
@@ -507,6 +560,7 @@ for depth_folded in depths_to_build:
         apply_correction=apply_correction,
         use_noise=(
             not USE_REAL_HARDWARE
+            and not USE_FAKE_BACKEND
             and not DRAW_CIRCUIT
             and not CHECK_CODE
             and not USE_STATEVECTOR
@@ -564,6 +618,12 @@ if USE_STATEVECTOR:
         enable_truncation=False,
         max_parallel_experiments=1,
         max_parallel_shots=1,
+    )
+elif USE_FAKE_BACKEND:
+    FAKE_DEVICE, backend = make_fake_aer_backend(
+        FAKE_BACKEND_NAME,
+        seed_simulator=150,
+        required_qubits=NUM_U_QUBITS * max(depth_folded_circuits),
     )
 elif USE_REAL_HARDWARE:
 
@@ -668,33 +728,27 @@ print(f"\nUNITARY_TYPE = {UNITARY_TYPE}")
 print(selected_unitary_summary(UNITARY_TYPE, NUM_U_QUBITS, DEPTH))
 print(f"DEPTH = {DEPTH}; maximum configured depth = {MAX_U_DEPTH}")
 
-if USE_REAL_HARDWARE:
+if USE_STATEVECTOR:
+    print("Backend: AerSimulator (statevector, noiseless)")
+elif USE_FAKE_BACKEND:
+    print(f"Backend: {FAKE_BACKEND_NAME} snapshot via AerSimulator")
+    print("Noise: fake-backend device snapshot; custom noise channels disabled")
+elif USE_REAL_HARDWARE:
     print(f"Backend: {backend.name}")
-
 else:
-    if USE_STATEVECTOR:
-        print("Backend: AerSimulator (statevector)")
-    else:
-        print("Backend: AerSimulator")
+    print("Backend: AerSimulator")
 
     active_noises = []
-
     if USE_DEPOLARIZING:
         active_noises.append("Depolarizing")
-
     if USE_AMPLITUDE_DAMPING:
         active_noises.append("Amplitude damping")
-
     if USE_PHASE_DAMPING:
         active_noises.append("Phase damping")
-
     if USE_COHERENT_OVERROTATION:
         active_noises.append("Coherent overrotation")
 
-    if active_noises:
-        print("Noise:", ", ".join(active_noises))
-    else:
-        print("Noise: none")
+    print("Noise:", ", ".join(active_noises) if active_noises else "none")
 
 precision = 12 if USE_STATEVECTOR else 4
 print("\nExpectation values of local method:")

@@ -1,4 +1,4 @@
-"""Shared logical-gate decomposition, one-shot U compilation and noise policy.
+"""Shared physical-depth decomposition, one-shot U compilation and noise policy.
 
 This module is used by circuit folding, global depth reduction and local depth
 reduction.  It deliberately compiles only operation plans generated for U.
@@ -28,7 +28,8 @@ class PrimitiveOp:
 
 @dataclass(frozen=True)
 class NoiseMarker:
-    logical_gate: str
+    # Noise is attached to the emitted primitive gate, not to the logical macro.
+    physical_gate: str
     qubits: tuple[int, ...]
     direction: int = 1
     macro_id: str = ""
@@ -46,7 +47,12 @@ def _p(name: str, qubits: Sequence[int], angle: Optional[float] = None,
 
 
 def decompose_logical_gate(gate: GateSpec, *, macro_id: str = "") -> tuple[tuple[PrimitiveOp, ...], ...]:
-    """Return counted decomposition slices exactly following the requested rules."""
+    """Return physical-depth-one decomposition slices.
+
+    A slice may contain several mutually disjoint one-qubit gates, but no qubit
+    is acted on twice inside one slice.  Thus every returned slice has circuit
+    depth one.
+    """
     name = gate.name
     q = gate.qubits
     theta = gate.angle
@@ -62,35 +68,35 @@ def decompose_logical_gate(gate: GateSpec, *, macro_id: str = "") -> tuple[tuple
     control, target = q
 
     if name == "cz":
-        # H(target) - CX(control,target) - H(target), counted as depth 1.
-        return ((
-            _p("h", (target,), tag="basis_h", macro_id=macro_id),
-            _p("cx", (control, target), tag="macro_cx", macro_id=macro_id),
-            _p("h", (target,), tag="basis_h", macro_id=macro_id),
-        ),)
+        # H(target) - CX(control,target) - H(target): physical depth 3.
+        return (
+            (_p("h", (target,), tag="basis_h", macro_id=macro_id),),
+            (_p("cx", (control, target), tag="macro_cx", macro_id=macro_id),),
+            (_p("h", (target,), tag="basis_h", macro_id=macro_id),),
+        )
 
     if theta is None:
         raise ValueError(f"{name} requires an angle.")
 
     if name == "crz":
-        # RZ(theta/2) - CX - RZ(-theta/2) - CX, counted as depth 1.
-        return ((
-            _p("rz", (target,), theta / 2.0, tag="macro_rotation", macro_id=macro_id),
-            _p("cx", (control, target), tag="macro_cx", macro_id=macro_id),
-            _p("rz", (target,), -theta / 2.0, tag="macro_rotation", macro_id=macro_id),
-            _p("cx", (control, target), tag="macro_cx", macro_id=macro_id),
-        ),)
+        # RZ(theta/2) - CX - RZ(-theta/2) - CX: physical depth 4.
+        return (
+            (_p("rz", (target,), theta / 2.0, tag="macro_rotation", macro_id=macro_id),),
+            (_p("cx", (control, target), tag="macro_cx", macro_id=macro_id),),
+            (_p("rz", (target,), -theta / 2.0, tag="macro_rotation", macro_id=macro_id),),
+            (_p("cx", (control, target), tag="macro_cx", macro_id=macro_id),),
+        )
 
     if name == "crx":
-        # H - RZ(theta/2) - CX - RZ(-theta/2) - CX - H, depth 1.
-        return ((
-            _p("h", (target,), tag="basis_h", macro_id=macro_id),
-            _p("rz", (target,), theta / 2.0, tag="macro_rotation", macro_id=macro_id),
-            _p("cx", (control, target), tag="macro_cx", macro_id=macro_id),
-            _p("rz", (target,), -theta / 2.0, tag="macro_rotation", macro_id=macro_id),
-            _p("cx", (control, target), tag="macro_cx", macro_id=macro_id),
-            _p("h", (target,), tag="basis_h", macro_id=macro_id),
-        ),)
+        # H - RZ(theta/2) - CX - RZ(-theta/2) - CX - H: depth 6.
+        return (
+            (_p("h", (target,), tag="basis_h", macro_id=macro_id),),
+            (_p("rz", (target,), theta / 2.0, tag="macro_rotation", macro_id=macro_id),),
+            (_p("cx", (control, target), tag="macro_cx", macro_id=macro_id),),
+            (_p("rz", (target,), -theta / 2.0, tag="macro_rotation", macro_id=macro_id),),
+            (_p("cx", (control, target), tag="macro_cx", macro_id=macro_id),),
+            (_p("h", (target,), tag="basis_h", macro_id=macro_id),),
+        )
 
     if name == "rzz":
         return (
@@ -100,38 +106,34 @@ def decompose_logical_gate(gate: GateSpec, *, macro_id: str = "") -> tuple[tuple
         )
 
     if name == "rxx":
-        # Put both H gates in the same counted slice as the adjacent CX.
+        # Parallel H basis layer, then CX-RZ-CX, then parallel H layer: depth 5.
         return (
             (
                 _p("h", (control,), tag="basis_h", macro_id=macro_id),
                 _p("h", (target,), tag="basis_h", macro_id=macro_id),
-                _p("cx", (control, target), tag="macro_cx", macro_id=macro_id),
             ),
+            (_p("cx", (control, target), tag="macro_cx", macro_id=macro_id),),
             (_p("rz", (target,), theta, tag="macro_rotation", macro_id=macro_id),),
+            (_p("cx", (control, target), tag="macro_cx", macro_id=macro_id),),
             (
-                _p("cx", (control, target), tag="macro_cx", macro_id=macro_id),
                 _p("h", (control,), tag="basis_h", macro_id=macro_id),
                 _p("h", (target,), tag="basis_h", macro_id=macro_id),
             ),
         )
 
     if name == "ryy":
-        # Put both +/-pi/2 RX basis changes in the CX slices.
+        # Parallel RX basis layer, then CX-RZ-CX, then inverse basis layer: depth 5.
         return (
             (
-                _p("rx", (control,), -math.pi / 2.0,
-                   tag="basis_ryy", macro_id=macro_id),
-                _p("rx", (target,), -math.pi / 2.0,
-                   tag="basis_ryy", macro_id=macro_id),
-                _p("cx", (control, target), tag="macro_cx", macro_id=macro_id),
+                _p("rx", (control,), -math.pi / 2.0, tag="basis_ryy", macro_id=macro_id),
+                _p("rx", (target,), -math.pi / 2.0, tag="basis_ryy", macro_id=macro_id),
             ),
+            (_p("cx", (control, target), tag="macro_cx", macro_id=macro_id),),
             (_p("rz", (target,), theta, tag="macro_rotation", macro_id=macro_id),),
+            (_p("cx", (control, target), tag="macro_cx", macro_id=macro_id),),
             (
-                _p("cx", (control, target), tag="macro_cx", macro_id=macro_id),
-                _p("rx", (control,), math.pi / 2.0,
-                   tag="basis_ryy", macro_id=macro_id),
-                _p("rx", (target,), math.pi / 2.0,
-                   tag="basis_ryy", macro_id=macro_id),
+                _p("rx", (control,), math.pi / 2.0, tag="basis_ryy", macro_id=macro_id),
+                _p("rx", (target,), math.pi / 2.0, tag="basis_ryy", macro_id=macro_id),
             ),
         )
 
@@ -139,6 +141,12 @@ def decompose_logical_gate(gate: GateSpec, *, macro_id: str = "") -> tuple[tuple
 
 
 def _merge_component_slices(component: SelectedComponent) -> list[PrimitiveOp]:
+    """Merge corresponding decomposition slices of disjoint logical gates.
+
+    This is the allowed overlap rule: decomposed gates may share a counted layer
+    only if their primitive operations are disjoint, so the physical circuit depth
+    of that counted layer remains exactly one.
+    """
     per_gate = []
     for gate_index, gate in enumerate(component.gates):
         macro_id = f"{component.label}:{gate_index}"
@@ -152,15 +160,20 @@ def _merge_component_slices(component: SelectedComponent) -> list[PrimitiveOp]:
 
     result: list[PrimitiveOp] = []
     for slice_index in range(component.included_depth):
-        micro_sequences = [list(slices[slice_index]) for slices in per_gate]
-        # Interleave microsteps of disjoint gates so matching gates remain
-        # visually and structurally parallel whenever possible.
-        for micro_index in range(max(len(seq) for seq in micro_sequences)):
-            for seq in micro_sequences:
-                if micro_index < len(seq):
-                    result.append(seq[micro_index])
+        physical_slice: list[PrimitiveOp] = []
+        occupied: set[int] = set()
+        for slices in per_gate:
+            for op in slices[slice_index]:
+                if occupied.intersection(op.qubits):
+                    raise ValueError(
+                        f"{component.label}: decomposition slice {slice_index + 1} "
+                        "has physical depth greater than one. Gates sharing a "
+                        "qubit must be placed in different counted layers."
+                    )
+                occupied.update(op.qubits)
+                physical_slice.append(op)
+        result.extend(physical_slice)
     return result
-
 
 def _inverse_primitive(op: PrimitiveOp) -> list[PrimitiveOp]:
     if op.name in _SELF_INVERSE:
@@ -181,7 +194,13 @@ def _inverse_primitive(op: PrimitiveOp) -> list[PrimitiveOp]:
 def component_plan(component: SelectedComponent, *, inverse: bool = False,
                    dress_cx: bool = False, include_noise: bool = True,
                    noise_direction: int = 1) -> list[PlanItem]:
-    """Build one component plan; a cut depth-three gate remains one component."""
+    """Build one component plan; a cut decomposed macro stays one component.
+
+    Custom simulator noise is inserted after EVERY emitted decomposition
+    primitive (H/RX/RY/RZ/S/SX/Pauli/CX).  The extra global Y gates used to
+    dress CX in even depth-reduced blocks are method-generated corrections, not
+    decomposition primitives, so they do not receive an extra custom channel.
+    """
     primitives = _merge_component_slices(component)
     if inverse:
         inverted: list[PrimitiveOp] = []
@@ -205,18 +224,19 @@ def component_plan(component: SelectedComponent, *, inverse: bool = False,
                 dressed.append(op)
         primitives = dressed
 
-    items: list[PlanItem] = list(primitives)
-    if include_noise:
-        direction = -1 if inverse else int(noise_direction)
-        for gate_index, gate in enumerate(component.gates):
+    items: list[PlanItem] = []
+    for op in primitives:
+        items.append(op)
+        if include_noise and op.tag != "global_y":
+            # Preserve the old sign convention for inverse rotation gates.
+            direction = -1 if inverse and op.name in {"rx", "ry", "rz"} else 1
             items.append(NoiseMarker(
-                logical_gate=gate.name,
-                qubits=gate.qubits,
+                physical_gate=op.name,
+                qubits=op.qubits,
                 direction=direction,
-                macro_id=f"{component.label}:{gate_index}",
+                macro_id=op.macro_id,
             ))
     return items
-
 
 def _candidate_signature(op: PrimitiveOp):
     if op.name == "y" and op.tag == "global_y":
@@ -315,7 +335,7 @@ def append_plan(qc, wires: Union[Sequence, Mapping[int, object]],
             if use_noise and noise_controller is not None:
                 physical = [_resolve_wire_map(wires, q) for q in item.qubits]
                 noise_controller.append(
-                    qc, physical, item.logical_gate, item.direction
+                    qc, physical, item.physical_gate, item.direction
                 )
             continue
 
@@ -368,7 +388,7 @@ def append_local_component_copy(qc, wire_map, component: SelectedComponent, *,
     """Append one atomic local-folding component on one logical copy.
 
     No custom H/Y/RX cancellation pass is applied in the local method.  The
-    complete (possibly truncated) macro component is folded as one G_i.
+    complete (possibly truncated) decomposed macro component is folded as one G_i.
     """
     items = component_plan(
         component,
@@ -385,11 +405,11 @@ def append_local_component_copy(qc, wire_map, component: SelectedComponent, *,
 
 
 class NoiseController:
-    """Insert exactly one configured noise boundary per logical gate.
+    """Insert custom simulator noise after each emitted primitive gate.
 
-    Legacy RX/RY/RZ/CX gates preserve the old policy.  A new decomposed two-
-    qubit macro receives one independent one-qubit channel on each participant,
-    only after the whole macro (or selected cut fragment) finishes.
+    Decomposed macros therefore receive noise after every H/RX/RY/RZ/... and
+    every CX in their decomposition. CX keeps the historical two-qubit
+    depolarizing rule plus independent damping on its two participants.
     """
 
     def __init__(self, *, use_depolarizing: bool,
@@ -441,7 +461,7 @@ class NoiseController:
         if self.phase_1q is not None:
             qc.append(self.phase_1q, [wire])
 
-    def _append_coherent(self, qc, wire, logical_gate: str, direction: int) -> None:
+    def _append_coherent(self, qc, wire, physical_gate: str, direction: int) -> None:
         if not self.use_coherent_overrotation:
             return
 
@@ -456,9 +476,9 @@ class NoiseController:
         x_like = {"rx", "x", "sx", "crx", "rxx"}
         y_like = {"ry", "y", "ryy", "h"}
         error_circuit = QuantumCircuit(1)
-        if logical_gate in x_like:
+        if physical_gate in x_like:
             error_circuit.rx(epsilon, 0)
-        elif logical_gate in y_like:
+        elif physical_gate in y_like:
             error_circuit.ry(epsilon, 0)
         else:
             error_circuit.rz(epsilon, 0)
@@ -468,34 +488,71 @@ class NoiseController:
             [wire],
         )
 
-    def append(self, qc, wires: Sequence, logical_gate: str, direction: int = 1) -> None:
+    def append(self, qc, wires: Sequence, physical_gate: str, direction: int = 1) -> None:
         wires = list(wires)
         if len(wires) == 1:
             self._append_1q_channels(qc, wires[0])
-            self._append_coherent(qc, wires[0], logical_gate, direction)
+            self._append_coherent(qc, wires[0], physical_gate, direction)
             return
         if len(wires) != 2:
-            raise ValueError("NoiseController supports one- and two-qubit gates only.")
+            raise ValueError("NoiseController supports one- and two-qubit primitives only.")
 
-        if logical_gate == "cx":
-            # Preserve the original random_type CX noise rule exactly.
-            if self.depolarizing_2q is not None:
-                qc.append(self.depolarizing_2q, wires)
-            if self.amplitude_1q is not None:
-                qc.append(self.amplitude_1q, [wires[0]])
-                qc.append(self.amplitude_1q, [wires[1]])
-            if self.phase_1q is not None:
-                qc.append(self.phase_1q, [wires[0]])
-                qc.append(self.phase_1q, [wires[1]])
-            # The historical code did not attach coherent error to CX.
-            return
+        if physical_gate != "cx":
+            raise ValueError(
+                f"Unexpected two-qubit primitive {physical_gate!r}; logical macros "
+                "must be decomposed to one-qubit gates and CX before noise insertion."
+            )
 
-        # New decomposed two-qubit gates: one channel per qubit, once, after
-        # the whole macro or selected fragment.
-        for wire in wires:
-            self._append_1q_channels(qc, wire)
-            self._append_coherent(qc, wire, logical_gate, direction)
+        # Historical CX policy, now applied to every decomposed CX as well.
+        if self.depolarizing_2q is not None:
+            qc.append(self.depolarizing_2q, wires)
+        if self.amplitude_1q is not None:
+            qc.append(self.amplitude_1q, [wires[0]])
+            qc.append(self.amplitude_1q, [wires[1]])
+        if self.phase_1q is not None:
+            qc.append(self.phase_1q, [wires[0]])
+            qc.append(self.phase_1q, [wires[1]])
+        # Preserve the historical model: no coherent overrotation is attached to CX.
 
+
+
+def make_fake_aer_backend(fake_backend_name: str, *, seed_simulator: int = 150,
+                           required_qubits: int | None = None):
+    """Create a noisy Aer simulator from an IBM fake-backend snapshot.
+
+    The fake snapshot supplies coupling, basis gates, readout properties and
+    device noise.  Aer performs the execution so mid-circuit measurement and
+    if_test control flow can be simulated.  No custom NoiseController channels
+    should be appended when this backend mode is selected.
+    """
+    if not isinstance(fake_backend_name, str) or not fake_backend_name.strip():
+        raise ValueError("FAKE_BACKEND_NAME must be a non-empty fake-backend class name.")
+
+    from qiskit_aer import AerSimulator
+    from qiskit_ibm_runtime import fake_provider
+
+    class_name = fake_backend_name.strip()
+    backend_class = getattr(fake_provider, class_name, None)
+    if backend_class is None:
+        available = sorted(
+            name for name in dir(fake_provider)
+            if name.startswith("Fake") and name not in {"FakeBackendV2", "FakeProviderForBackendV2"}
+        )
+        raise ValueError(
+            f"Unknown or unavailable FAKE_BACKEND_NAME={class_name!r}. "
+            "Install a qiskit-ibm-runtime version that contains it, or choose one "
+            f"of the available classes: {', '.join(available)}"
+        )
+
+    snapshot_backend = backend_class()
+    if required_qubits is not None and snapshot_backend.num_qubits < int(required_qubits):
+        raise ValueError(
+            f"{class_name} has {snapshot_backend.num_qubits} qubits, but this run "
+            f"needs at least {int(required_qubits)} physical qubits."
+        )
+    simulator = AerSimulator.from_backend(snapshot_backend)
+    simulator.set_options(seed_simulator=int(seed_simulator))
+    return snapshot_backend, simulator
 
 # ============================================================
 # Small exact matrices used by validation and the local checker
