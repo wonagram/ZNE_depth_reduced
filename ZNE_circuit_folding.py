@@ -12,27 +12,52 @@ from U_config import (
     select_unitary_components,
     selected_unitary_summary,
 )
-from unitary_tools import NoiseController, append_unitary_block
+from unitary_tools import NoiseController, append_unitary_block, make_fake_aer_backend
 from state_preparation import *
 
 # ============================================================
-# Hardware / simulator / statevector
+# Hardware / simulator / statevector / fake backend
 # ============================================================
 USE_REAL_HARDWARE = False
 DEVICE_NAME = False
 # DEVICE_NAME = "ibm_strasbourg"
 
 USE_STATEVECTOR = False
-shots = 10**3  # Used only when USE_STATEVECTOR is False.
+
+# Fake-backend mode uses an IBM fake-device snapshot to configure Aer.
+# The snapshot supplies the device noise model; our custom noise channels are OFF.
+# Aer executes the circuit, so mid-circuit measurement and if_test are supported.
+USE_FAKE_BACKEND = True
+FAKE_BACKEND_NAME = "FakeQuebec"
+# Available modern examples (qiskit_ibm_runtime.fake_provider):
+#   FakeSherbrooke, FakeBrisbane, FakeKyiv, FakeKyoto, FakeOsaka,
+#   FakeQuebec, FakeStrasbourg, FakeTorino, FakeBrussels, FakeKawasaki,
+#   FakeCusco, FakeFez, FakeMarrakesh, FakeAachen, FakeBerlin,
+#   FakeBoston, FakeKingston, FakeMiami, FakePittsburgh
+#   FakeFractionalBackend explicitly models control flow, but has only 5 qubits.
+
+shots = 10**3  # Used by shot-based simulator/fake/hardware; ignored by statevector.
+
+_backend_modes = {
+    "USE_REAL_HARDWARE": USE_REAL_HARDWARE,
+    "USE_STATEVECTOR": USE_STATEVECTOR,
+    "USE_FAKE_BACKEND": USE_FAKE_BACKEND,
+}
+_enabled_backend_modes = [name for name, enabled in _backend_modes.items() if enabled]
+if len(_enabled_backend_modes) > 1:
+    raise ValueError(
+        "Choose only one backend mode. Multiple flags are True: "
+        + ", ".join(_enabled_backend_modes)
+    )
 
 # ============================================================
 # Unitary selection, counted depth, and logical-qubit count
 # Available UNITARY_TYPE values:
 #   random_type, hea_cz, hea_crx, hea_crz, hea_rzz,
-#   qaoa_ising, qaoa_xy, clifford_only
+#   qaoa, qaoa_xy, clifford_only
 # ============================================================
-UNITARY_TYPE = "qaoa"
-DEPTH = 31
+UNITARY_TYPE = "random_type"
+DEPTH = 18
 NUM_U_QUBITS = 2
 
 # ============================================================
@@ -59,17 +84,14 @@ amplitude_damping_strength = 0.02
 phase_damping_strength = 0.02
 overrotation_epsilon = 0.02
 
-if USE_STATEVECTOR:
-    USE_REAL_HARDWARE = False
-
-if DRAW_CIRCUIT or USE_STATEVECTOR:
+if DRAW_CIRCUIT or USE_STATEVECTOR or USE_FAKE_BACKEND:
     USE_DEPOLARIZING = False
     USE_AMPLITUDE_DAMPING = False
     USE_PHASE_DAMPING = False
     USE_COHERENT_OVERROTATION = False
 
 # ============================================================
-# Select U.  DEPTH may cut an RXX/RYY/RZZ component after slice 1 or 2.
+# Select U. DEPTH may cut any decomposed macro at a physical-depth boundary.
 # ============================================================
 UNITARY_TYPE = normalize_unitary_type(UNITARY_TYPE)
 SELECTED_COMPONENTS = select_unitary_components(
@@ -102,6 +124,14 @@ if USE_STATEVECTOR:
         precision="double",
         zero_threshold=0.0,
         max_parallel_experiments=1,
+    )
+
+elif USE_FAKE_BACKEND:
+
+    FAKE_DEVICE, backend = make_fake_aer_backend(
+        FAKE_BACKEND_NAME,
+        seed_simulator=150,
+        required_qubits=NUM_U_QUBITS,
     )
 
 elif USE_REAL_HARDWARE:
@@ -185,6 +215,7 @@ for depth_folded in depths_to_build:
         noise_controller=NOISE_CONTROLLER,
         use_noise=(
             not USE_REAL_HARDWARE
+            and not USE_FAKE_BACKEND
             and not DRAW_CIRCUIT
             and not USE_STATEVECTOR
         ),
@@ -203,6 +234,7 @@ for depth_folded in depths_to_build:
             noise_controller=NOISE_CONTROLLER,
             use_noise=(
                 not USE_REAL_HARDWARE
+                and not USE_FAKE_BACKEND
                 and not DRAW_CIRCUIT
                 and not USE_STATEVECTOR
             ),
@@ -220,6 +252,7 @@ for depth_folded in depths_to_build:
             noise_controller=NOISE_CONTROLLER,
             use_noise=(
                 not USE_REAL_HARDWARE
+                and not USE_FAKE_BACKEND
                 and not DRAW_CIRCUIT
                 and not USE_STATEVECTOR
             ),
@@ -374,33 +407,27 @@ print(
     f"inverse RX(pi/2)={COMPILATION_TOTALS['basis_rx_pairs']}"
 )
 
-if USE_REAL_HARDWARE:
+if USE_STATEVECTOR:
+    print("Backend: AerSimulator (statevector, noiseless)")
+elif USE_FAKE_BACKEND:
+    print(f"Backend: {FAKE_BACKEND_NAME} snapshot via AerSimulator")
+    print("Noise: fake-backend device snapshot; custom noise channels disabled")
+elif USE_REAL_HARDWARE:
     print(f"Backend: {backend.name}")
-
 else:
-    if USE_STATEVECTOR:
-        print("Backend: AerSimulator (statevector)")
-    else:
-        print("Backend: AerSimulator")
+    print("Backend: AerSimulator")
 
     active_noises = []
-
     if USE_DEPOLARIZING:
         active_noises.append("Depolarizing")
-
     if USE_AMPLITUDE_DAMPING:
         active_noises.append("Amplitude damping")
-
     if USE_PHASE_DAMPING:
         active_noises.append("Phase damping")
-
     if USE_COHERENT_OVERROTATION:
         active_noises.append("Coherent overrotation")
 
-    if active_noises:
-        print("Noise:", ", ".join(active_noises))
-    else:
-        print("Noise: none")
+    print("Noise:", ", ".join(active_noises) if active_noises else "none")
 
 precision = 12 if USE_STATEVECTOR else 4
 print(f"\nExpectation values of circuit_folded method:")

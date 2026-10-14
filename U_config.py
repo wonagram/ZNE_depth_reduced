@@ -1,13 +1,18 @@
 """Deterministic logical-unitary configurations used by all three ZNE scripts.
 
-Depth conventions used here are the conventions requested for this project:
+Depth conventions used here follow the physical depth of the requested
+decomposition.  Every counted layer has circuit depth one: operations may
+share a counted layer only when they act on disjoint qubits.
 
-* RX/RY/RZ, Pauli, H, S, SX, CX, CZ, CRX and CRZ consume one selected
-  depth slot.
-* RZZ, RXX and RYY consume three selected depth slots.
-* A depth-three pair component may contain several disjoint pair gates in
-  parallel.  Selecting DEPTH inside that component keeps only its leading
-  one or two decomposition slices, but the selected fragment remains one
+* RX/RY/RZ, Pauli, H, S, SX and CX consume one selected depth slot.
+* CZ consumes 3 slots: H - CX - H.
+* RZZ consumes 3 slots: CX - RZ - CX.
+* CRZ consumes 4 slots: RZ - CX - RZ - CX.
+* CRX consumes 6 slots: H - RZ - CX - RZ - CX - H.
+* RXX and RYY consume 5 slots because their two basis changes are parallel
+  one-qubit layers around the three-layer CX-RZ-CX core.
+* Several disjoint logical gates may share the same decomposition slices.
+  If DEPTH ends inside any decomposed macro, the retained prefix remains one
   atomic component for local folding.
 
 The original U_GATES dictionary and all original theta variables are kept
@@ -161,9 +166,9 @@ class GateSpec:
 class ComponentSpec:
     """One atomic local-folding component.
 
-    depth is the number of main-file DEPTH slots consumed by this component.
-    All gates in a component are disjoint and run in parallel at the logical
-    recipe level.
+    depth is the physical decomposition depth consumed by this component.
+    All logical gates in a component are disjoint, so corresponding primitive
+    slices may share the same counted layer without making circuit depth > 1.
     """
 
     label: str
@@ -189,7 +194,17 @@ class SelectedComponent:
 NEW_TYPE_MIN_DEPTH = 60
 MAX_SUPPORTED_QUBITS = 5
 
-_DEPTH_THREE_GATES = {"rxx", "ryy", "rzz"}
+_LOGICAL_GATE_DEPTHS = {
+    "rx": 1, "ry": 1, "rz": 1,
+    "x": 1, "y": 1, "z": 1, "h": 1, "s": 1, "sx": 1,
+    "cx": 1,
+    "cz": 3,
+    "rzz": 3,
+    "crz": 4,
+    "rxx": 5,
+    "ryy": 5,
+    "crx": 6,
+}
 _ALLOWED_LOGICAL_GATES = {
     "rx", "ry", "rz",
     "x", "y", "z", "h", "s", "sx",
@@ -215,7 +230,7 @@ UNITARY_METADATA = {
     },
     "hea_rzz": {
         "minimum_qubits": 2,
-        "description": "Layered HEA with RY/RZ local rotations and three-slot RZZ matchings.",
+        "description": "Layered HEA with RY/RZ local rotations and three-layer RZZ matchings.",
     },
     "qaoa": {
         "minimum_qubits": 1,
@@ -238,7 +253,6 @@ UNITARY_ALIASES = {
 }
 
 _TYPE_SEEDS = {
-    "random_type": 4100,
     "hea_cz": 4197,
     "hea_crx": 4294,
     "hea_crz": 4391,
@@ -256,7 +270,7 @@ def _gate(name: str, *qubits: int, angle: Optional[float] = None) -> GateSpec:
 def logical_gate_depth(name: str) -> int:
     if name not in _ALLOWED_LOGICAL_GATES:
         raise ValueError(f"Unsupported logical gate {name!r}.")
-    return 3 if name in _DEPTH_THREE_GATES else 1
+    return _LOGICAL_GATE_DEPTHS[name]
 
 
 def _component(label: str, gates: Iterable[GateSpec], family: str) -> ComponentSpec:
@@ -266,8 +280,8 @@ def _component(label: str, gates: Iterable[GateSpec], family: str) -> ComponentS
     depths = {logical_gate_depth(gate.name) for gate in gates}
     if len(depths) != 1:
         raise ValueError(
-            f"Component {label!r} mixes one-slot and three-slot gates. "
-            "Put them in separate U-config components."
+            f"Component {label!r} mixes logical gates with different physical "
+            "decomposition depths. Put them in separate U-config components."
         )
     return ComponentSpec(
         label=label,
@@ -312,8 +326,8 @@ def _validate_components(unitary_type: str, n: int,
         raise ValueError(f"Unitary type {unitary_type!r} produced no components.")
     for j, component in enumerate(result):
         occupied: set[int] = set()
-        if component.depth not in (1, 3):
-            raise ValueError(f"{component.label}: component depth must be 1 or 3.")
+        if component.depth < 1:
+            raise ValueError(f"{component.label}: component depth must be positive.")
         for gate in component.gates:
             if gate.name not in _ALLOWED_LOGICAL_GATES:
                 raise ValueError(f"{component.label}: unsupported gate {gate.name!r}.")
@@ -330,7 +344,8 @@ def _validate_components(unitary_type: str, n: int,
                 raise ValueError(f"{component.label}: invalid qubit in {gate}.")
             if occupied.intersection(gate.qubits):
                 raise ValueError(
-                    f"{component.label}: gates overlap horizontally. "
+                    f"{component.label}: logical gates share a qubit, so their "
+                    "decomposition slices cannot all remain physical depth one. "
                     "Split them into separate components."
                 )
             occupied.update(gate.qubits)
@@ -588,11 +603,11 @@ def get_unitary_max_depth(unitary_type: str, num_qubits: int) -> int:
 
 def select_unitary_components(unitary_type: str, num_qubits: int,
                               depth: int) -> tuple[SelectedComponent, ...]:
-    """Select exactly ``depth`` counted slots, retaining a cut macro atomically.
+    """Select exactly ``depth`` physical-depth slots, retaining a cut macro atomically.
 
-    If the cut lands inside an RXX/RYY/RZZ component, included_depth is 1 or 2.
-    The runtime decomposer then emits exactly that prefix, and local folding
-    treats the truncated prefix as one component G_i.
+    DEPTH may end inside CZ, CRZ, CRX, RZZ, RXX or RYY.  The runtime
+    decomposer emits exactly the retained prefix, and local folding treats that
+    truncated prefix as one component G_i.
     """
     if isinstance(depth, bool) or not isinstance(depth, int):
         raise ValueError("DEPTH must be an integer.")
