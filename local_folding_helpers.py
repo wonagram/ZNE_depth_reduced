@@ -1,9 +1,8 @@
 """Local depth-reduced folding with intermediate correction and qubit reuse.
 
-One selected logical component is exactly one component G_i.  A component may
-be a truncated or complete decomposed macro gate whose counted physical depth
-can be 1, 3, 4, 5 or 6.  Decomposition slices are never separate G_i stages.
-For each component:
+One selected logical component is one component G_i.  A component may be a
+truncated or complete macro gate whose counted U depth is one or three.  For
+each component:
 prepare singlets -> all copies -> all Bell measurements -> Pauli corrections
 -> reset measured wires -> next component. No live logical state is reset.
 
@@ -462,10 +461,9 @@ def build_intermediate_local_circuit(
     factor 5 both links correct the same component output, latest link first.
     The following component starts on those corrected, un-reset live wires.
 
-    Keep the supplied U-noise policy: explicit custom channels may be inserted
-    after every emitted decomposition primitive inside each copied WHOLE macro,
-    but never after Bell preparation, Bell measurement, correction, or reset.
-    Reset imperfections/idle noise therefore require a backend noise model.
+    Keep the supplied noise policy: explicit channels are inserted only after
+    copied rotation/CX gates, NOT after auxiliary gates, measurement or reset.
+    Reset imperfections/idle noise therefore require a separate noise model.
     """
     from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
 
