@@ -404,12 +404,161 @@ def append_local_component_copy(qc, wire_map, component: SelectedComponent, *,
     )
 
 
-class NoiseController:
-    """Insert custom simulator noise after each emitted primitive gate.
+ARTIFICIAL_NOISE_LABEL = "__zne_artificial_noise__"
 
-    Decomposed macros therefore receive noise after every H/RX/RY/RZ/... and
-    every CX in their decomposition. CX keeps the historical two-qubit
-    depolarizing rule plus independent damping on its two participants.
+_TWO_QUBIT_PAULI_LABELS = tuple(
+    first + second
+    for first in "IXYZ"
+    for second in "IXYZ"
+    if first + second != "II"
+)
+
+_DEPTH_IGNORED_OPERATION_NAMES = {
+    "delay", "measure", "reset",
+    "kraus", "superop", "quantum_channel", "pauli",
+    "save_expectation_value", "save_statevector", "set_statevector",
+}
+
+
+def depth_noise_scale(depth: float, *, reference_depth: float = 50.0,
+                      noise_multiplier: float = 10.0) -> float:
+    """Linear scale used by the depth-dependent noise model.
+
+    The scale is 1 at depth 0 and ``noise_multiplier`` at
+    ``reference_depth``.  It intentionally continues linearly beyond the
+    reference depth and is never silently capped.
+    """
+    depth = float(depth)
+    reference_depth = float(reference_depth)
+    noise_multiplier = float(noise_multiplier)
+    if not np.isfinite(depth) or depth < 0.0:
+        raise ValueError(f"Noise depth must be finite and nonnegative, got {depth}.")
+    if not np.isfinite(reference_depth) or reference_depth <= 0.0:
+        raise ValueError("REFERENCE_DEPTH must be positive and finite.")
+    if not np.isfinite(noise_multiplier) or noise_multiplier <= 0.0:
+        raise ValueError("NOISE_MULTIPLIER must be positive and finite.")
+    return 1.0 + (noise_multiplier - 1.0) * depth / reference_depth
+
+
+def depth_noise_parameters(depth: float, *, reference_depth: float = 50.0,
+                           noise_multiplier: float = 10.0,
+                           p1_initial: float = 0.000245,
+                           p2_initial: float = 0.006970,
+                           gamma1_initial: float = 0.000112173,
+                           gamma2_initial: float = 0.002113149) -> dict[str, float]:
+    """Return the four linearly increasing noise parameters at ``depth``."""
+    scale = depth_noise_scale(
+        depth,
+        reference_depth=reference_depth,
+        noise_multiplier=noise_multiplier,
+    )
+    parameters = {
+        "p_1q": float(p1_initial) * scale,
+        "p_2q": float(p2_initial) * scale,
+        "gamma_1q": float(gamma1_initial) * scale,
+        "gamma_2q": float(gamma2_initial) * scale,
+    }
+    for name, value in parameters.items():
+        if not np.isfinite(value) or value < 0.0:
+            raise ValueError(
+                f"Depth-dependent parameter {name} is invalid at depth {depth}: {value}."
+            )
+        if value > 1.0:
+            raise ValueError(
+                f"Depth-dependent parameter {name} exceeds 1 at depth {depth}: "
+                f"{value}. Reduce the initial value, multiplier, or circuit depth."
+            )
+    return parameters
+
+
+def random_dirichlet_partition(rng: np.random.Generator, total: float,
+                               count: int) -> np.ndarray:
+    """Split ``total`` into ``count`` fresh positive Dirichlet weights."""
+    total = float(total)
+    count = int(count)
+    if count <= 0:
+        raise ValueError("Dirichlet partition count must be positive.")
+    if not np.isfinite(total) or not 0.0 <= total <= 1.0:
+        raise ValueError(f"Pauli error probability must be in [0, 1], got {total}.")
+    weights = np.asarray(rng.dirichlet(np.ones(count)), dtype=float)
+    probabilities = total * weights
+    # Enforce the requested sum up to machine precision without changing the
+    # independently generated Dirichlet proportions in any meaningful way.
+    if count > 1:
+        probabilities[-1] = total - float(np.sum(probabilities[:-1]))
+    else:
+        probabilities[0] = total
+    if np.any(probabilities < -1e-15) or not np.isclose(
+        float(np.sum(probabilities)), total, rtol=0.0, atol=1e-14
+    ):
+        raise RuntimeError("Generated Pauli probabilities do not sum to the requested total.")
+    probabilities = np.maximum(probabilities, 0.0)
+    return probabilities
+
+
+def _mark_artificial_noise_instruction(instruction):
+    """Label an inserted channel so depth/gate counters can exclude it."""
+    try:
+        instruction.label = ARTIFICIAL_NOISE_LABEL
+    except Exception:
+        # Qiskit versions differ slightly in Instruction label mutability.
+        # The operation-name checks below still exclude standard Aer channels.
+        pass
+    return instruction
+
+
+def _original_circuit_gate_depth(qc, target_wires: Sequence | None = None) -> int:
+    """Depth of the current original-gate location, excluding noise channels.
+
+    Depth is tracked separately on every physical wire.  Returning the depth on
+    ``target_wires`` is essential because complete U copies on disjoint folding
+    blocks are appended sequentially in Python but remain parallel in circuit
+    depth.  Initial-state gates, Bell-state gates, method-generated basis
+    changes, and previous logical gates on the relevant causal wires contribute;
+    previously inserted artificial channels do not.  A barrier synchronizes its
+    wires without adding a depth layer.
+    """
+    depths = [0] * int(qc.num_qubits)
+    for item in qc.data:
+        op = item.operation
+        name = str(getattr(op, "name", ""))
+        label = getattr(op, "label", None)
+        qindices = [qc.find_bit(qubit).index for qubit in item.qubits]
+        if not qindices:
+            continue
+        if label == ARTIFICIAL_NOISE_LABEL or name in _DEPTH_IGNORED_OPERATION_NAMES:
+            continue
+        if name == "barrier":
+            synchronized = max(depths[index] for index in qindices)
+            for index in qindices:
+                depths[index] = synchronized
+            continue
+
+        gate_depth = max(depths[index] for index in qindices) + 1
+        for index in qindices:
+            depths[index] = gate_depth
+
+    if target_wires is None:
+        return max(depths, default=0)
+    target_indices = [qc.find_bit(wire).index for wire in target_wires]
+    if not target_indices:
+        return 0
+    return max(depths[index] for index in target_indices)
+
+
+class NoiseController:
+    """Insert either the historical constant noise or the new depth-dependent noise.
+
+    The two custom-noise families are mutually exclusive:
+
+    * Historical constant mode: depolarizing, amplitude damping, phase damping,
+      and coherent overrotation retain their previous semantics.
+    * Depth-dependent mode: independently randomized one- and two-qubit Pauli
+      channels and/or deterministic amplitude damping use parameters evaluated
+      at the original circuit depth of each error location.
+
+    Decomposed macros still receive noise after every emitted primitive gate.
+    The insertion locations and all folding logic are unchanged.
     """
 
     def __init__(self, *, use_depolarizing: bool,
@@ -419,47 +568,211 @@ class NoiseController:
                  depolarizing_strength: float,
                  amplitude_damping_strength: float,
                  phase_damping_strength: float,
-                 overrotation_epsilon: float):
+                 overrotation_epsilon: float,
+                 use_increasing_random_pauli: bool = False,
+                 use_increasing_amplitude_damping: bool = False,
+                 base_seed: int = 150,
+                 reference_depth: float = 50.0,
+                 noise_multiplier: float = 10.0,
+                 p1_initial: float = 0.000245,
+                 p2_initial: float = 0.006970,
+                 gamma1_initial: float = 0.000112173,
+                 gamma2_initial: float = 0.002113149):
         from qiskit_aer.noise import (
             amplitude_damping_error,
             depolarizing_error,
             phase_damping_error,
         )
 
+        # Historical constant-noise configuration.
         self.use_depolarizing = bool(use_depolarizing)
         self.use_amplitude_damping = bool(use_amplitude_damping)
         self.use_phase_damping = bool(use_phase_damping)
         self.use_coherent_overrotation = bool(use_coherent_overrotation)
         self.overrotation_epsilon = float(overrotation_epsilon)
 
+        # New depth-dependent configuration.
+        self.use_increasing_random_pauli = bool(use_increasing_random_pauli)
+        self.use_increasing_amplitude_damping = bool(
+            use_increasing_amplitude_damping
+        )
+        self.base_seed = int(base_seed)
+        self.reference_depth = float(reference_depth)
+        self.noise_multiplier = float(noise_multiplier)
+        self.p1_initial = float(p1_initial)
+        self.p2_initial = float(p2_initial)
+        self.gamma1_initial = float(gamma1_initial)
+        self.gamma2_initial = float(gamma2_initial)
+        self.rng = np.random.default_rng(self.base_seed)
+
+        self.constant_noise_active = any((
+            self.use_depolarizing,
+            self.use_amplitude_damping,
+            self.use_phase_damping,
+            self.use_coherent_overrotation,
+        ))
+        self.increasing_noise_active = any((
+            self.use_increasing_random_pauli,
+            self.use_increasing_amplitude_damping,
+        ))
+        if self.constant_noise_active and self.increasing_noise_active:
+            raise ValueError(
+                "Historical constant noise and depth-dependent noise cannot be "
+                "enabled together in one NoiseController."
+            )
+
+        # Validate the requested reference behavior only when the new model is used.
+        if self.increasing_noise_active:
+            at_zero = depth_noise_parameters(
+                0.0,
+                reference_depth=self.reference_depth,
+                noise_multiplier=self.noise_multiplier,
+                p1_initial=self.p1_initial,
+                p2_initial=self.p2_initial,
+                gamma1_initial=self.gamma1_initial,
+                gamma2_initial=self.gamma2_initial,
+            )
+            at_reference = depth_noise_parameters(
+                self.reference_depth,
+                reference_depth=self.reference_depth,
+                noise_multiplier=self.noise_multiplier,
+                p1_initial=self.p1_initial,
+                p2_initial=self.p2_initial,
+                gamma1_initial=self.gamma1_initial,
+                gamma2_initial=self.gamma2_initial,
+            )
+            expected_initials = {
+                "p_1q": self.p1_initial,
+                "p_2q": self.p2_initial,
+                "gamma_1q": self.gamma1_initial,
+                "gamma_2q": self.gamma2_initial,
+            }
+            for name, initial in expected_initials.items():
+                if not math.isclose(
+                    at_zero[name], initial, rel_tol=0.0, abs_tol=1e-15
+                ):
+                    raise AssertionError(
+                        f"{name} does not equal its initial value at D=0."
+                    )
+                expected_reference = initial * self.noise_multiplier
+                if not math.isclose(
+                    at_reference[name], expected_reference,
+                    rel_tol=1e-12, abs_tol=1e-15,
+                ):
+                    raise AssertionError(
+                        f"{name} does not equal NOISE_MULTIPLIER times its initial "
+                        "value at REFERENCE_DEPTH."
+                    )
+
         self.depolarizing_1q = (
-            depolarizing_error(float(depolarizing_strength), 1).to_instruction()
+            _mark_artificial_noise_instruction(
+                depolarizing_error(float(depolarizing_strength), 1).to_instruction()
+            )
             if self.use_depolarizing else None
         )
         self.depolarizing_2q = (
-            depolarizing_error(float(depolarizing_strength), 2).to_instruction()
+            _mark_artificial_noise_instruction(
+                depolarizing_error(float(depolarizing_strength), 2).to_instruction()
+            )
             if self.use_depolarizing else None
         )
         self.amplitude_1q = (
-            amplitude_damping_error(
-                float(amplitude_damping_strength), canonical_kraus=False
-            ).to_instruction()
+            _mark_artificial_noise_instruction(
+                amplitude_damping_error(
+                    float(amplitude_damping_strength), canonical_kraus=False
+                ).to_instruction()
+            )
             if self.use_amplitude_damping else None
         )
         self.phase_1q = (
-            phase_damping_error(
-                float(phase_damping_strength), canonical_kraus=False
-            ).to_instruction()
+            _mark_artificial_noise_instruction(
+                phase_damping_error(
+                    float(phase_damping_strength), canonical_kraus=False
+                ).to_instruction()
+            )
             if self.use_phase_damping else None
         )
 
-    def _append_1q_channels(self, qc, wire) -> None:
+        self._runtime = {
+            "max_original_gate_depth": 0,
+            "last_original_gate_depth": None,
+            "random_pauli_1q_channels": 0,
+            "random_pauli_2q_channels": 0,
+            "increasing_amplitude_1q_channels": 0,
+            "increasing_amplitude_2q_gate_locations": 0,
+            "last_depth_dependent_parameters": None,
+        }
+
+    def _append_instruction(self, qc, instruction, wires) -> None:
+        qc.append(_mark_artificial_noise_instruction(instruction), list(wires))
+
+    def _depth_parameters(self, qc, wires: Sequence) -> tuple[int, dict[str, float]]:
+        depth = _original_circuit_gate_depth(qc, wires)
+        parameters = depth_noise_parameters(
+            depth,
+            reference_depth=self.reference_depth,
+            noise_multiplier=self.noise_multiplier,
+            p1_initial=self.p1_initial,
+            p2_initial=self.p2_initial,
+            gamma1_initial=self.gamma1_initial,
+            gamma2_initial=self.gamma2_initial,
+        )
+        self._runtime["last_original_gate_depth"] = int(depth)
+        self._runtime["max_original_gate_depth"] = max(
+            int(self._runtime["max_original_gate_depth"]), int(depth)
+        )
+        self._runtime["last_depth_dependent_parameters"] = dict(parameters)
+        return int(depth), parameters
+
+    def _append_constant_1q_channels(self, qc, wire) -> None:
         if self.depolarizing_1q is not None:
-            qc.append(self.depolarizing_1q, [wire])
+            self._append_instruction(qc, self.depolarizing_1q, [wire])
         if self.amplitude_1q is not None:
-            qc.append(self.amplitude_1q, [wire])
+            self._append_instruction(qc, self.amplitude_1q, [wire])
         if self.phase_1q is not None:
-            qc.append(self.phase_1q, [wire])
+            self._append_instruction(qc, self.phase_1q, [wire])
+
+    def _append_random_pauli_1q(self, qc, wire, total_probability: float) -> None:
+        from qiskit_aer.noise import pauli_error
+
+        probabilities = random_dirichlet_partition(
+            self.rng, total_probability, 3
+        )
+        terms = [
+            ("I", 1.0 - total_probability),
+            ("X", float(probabilities[0])),
+            ("Y", float(probabilities[1])),
+            ("Z", float(probabilities[2])),
+        ]
+        self._append_instruction(qc, pauli_error(terms).to_instruction(), [wire])
+        self._runtime["random_pauli_1q_channels"] += 1
+
+    def _append_random_pauli_2q(self, qc, wires, total_probability: float) -> None:
+        from qiskit_aer.noise import pauli_error
+
+        probabilities = random_dirichlet_partition(
+            self.rng, total_probability, len(_TWO_QUBIT_PAULI_LABELS)
+        )
+        terms = [("II", 1.0 - total_probability)]
+        terms.extend(
+            (label, float(probability))
+            for label, probability in zip(_TWO_QUBIT_PAULI_LABELS, probabilities)
+        )
+        self._append_instruction(qc, pauli_error(terms).to_instruction(), wires)
+        self._runtime["random_pauli_2q_channels"] += 1
+
+    def _append_increasing_amplitude(self, qc, wires, gamma: float,
+                                     *, two_qubit_location: bool) -> None:
+        from qiskit_aer.noise import amplitude_damping_error
+
+        instruction = amplitude_damping_error(
+            float(gamma), canonical_kraus=False
+        ).to_instruction()
+        for wire in wires:
+            self._append_instruction(qc, instruction, [wire])
+            self._runtime["increasing_amplitude_1q_channels"] += 1
+        if two_qubit_location:
+            self._runtime["increasing_amplitude_2q_gate_locations"] += 1
 
     def _append_coherent(self, qc, wire, physical_gate: str, direction: int) -> None:
         if not self.use_coherent_overrotation:
@@ -483,47 +796,170 @@ class NoiseController:
         else:
             error_circuit.rz(epsilon, 0)
 
-        qc.append(
-            coherent_unitary_error(Operator(error_circuit)).to_instruction(),
-            [wire],
-        )
+        instruction = coherent_unitary_error(Operator(error_circuit)).to_instruction()
+        self._append_instruction(qc, instruction, [wire])
 
     def append(self, qc, wires: Sequence, physical_gate: str, direction: int = 1) -> None:
         wires = list(wires)
-        if len(wires) == 1:
-            self._append_1q_channels(qc, wires[0])
-            self._append_coherent(qc, wires[0], physical_gate, direction)
-            return
-        if len(wires) != 2:
+        if len(wires) not in (1, 2):
             raise ValueError("NoiseController supports one- and two-qubit primitives only.")
-
-        if physical_gate != "cx":
+        if len(wires) == 2 and physical_gate != "cx":
             raise ValueError(
                 f"Unexpected two-qubit primitive {physical_gate!r}; logical macros "
                 "must be decomposed to one-qubit gates and CX before noise insertion."
             )
 
-        # Historical CX policy, now applied to every decomposed CX as well.
+        depth_parameters = None
+        if self.increasing_noise_active:
+            _, depth_parameters = self._depth_parameters(qc, wires)
+
+        if len(wires) == 1:
+            self._append_constant_1q_channels(qc, wires[0])
+            if self.use_increasing_random_pauli:
+                self._append_random_pauli_1q(
+                    qc, wires[0], depth_parameters["p_1q"]
+                )
+            if self.use_increasing_amplitude_damping:
+                self._append_increasing_amplitude(
+                    qc, wires, depth_parameters["gamma_1q"],
+                    two_qubit_location=False,
+                )
+            self._append_coherent(qc, wires[0], physical_gate, direction)
+            return
+
+        # Historical constant CX policy, preserved exactly.
         if self.depolarizing_2q is not None:
-            qc.append(self.depolarizing_2q, wires)
+            self._append_instruction(qc, self.depolarizing_2q, wires)
         if self.amplitude_1q is not None:
-            qc.append(self.amplitude_1q, [wires[0]])
-            qc.append(self.amplitude_1q, [wires[1]])
+            self._append_instruction(qc, self.amplitude_1q, [wires[0]])
+            self._append_instruction(qc, self.amplitude_1q, [wires[1]])
         if self.phase_1q is not None:
-            qc.append(self.phase_1q, [wires[0]])
-            qc.append(self.phase_1q, [wires[1]])
+            self._append_instruction(qc, self.phase_1q, [wires[0]])
+            self._append_instruction(qc, self.phase_1q, [wires[1]])
+
+        if self.use_increasing_random_pauli:
+            self._append_random_pauli_2q(qc, wires, depth_parameters["p_2q"])
+        if self.use_increasing_amplitude_damping:
+            self._append_increasing_amplitude(
+                qc, wires, depth_parameters["gamma_2q"],
+                two_qubit_location=True,
+            )
         # Preserve the historical model: no coherent overrotation is attached to CX.
 
+    def runtime_report(self) -> dict:
+        """JSON-serializable configuration and runtime validation summary."""
+        return {
+            "depth_definition": (
+                "Per-location structural depth on the gate's physical wires; disjoint "
+                "blocks can remain parallel. Artificial noise channels, measurement, "
+                "reset, and delay are excluded, and barriers synchronize without "
+                "increasing depth."
+            ),
+            "base_seed": self.base_seed,
+            "reference_depth": self.reference_depth,
+            "noise_multiplier": self.noise_multiplier,
+            "initial_parameters": {
+                "p_1q": self.p1_initial,
+                "p_2q": self.p2_initial,
+                "gamma_1q": self.gamma1_initial,
+                "gamma_2q": self.gamma2_initial,
+            },
+            "increments_per_depth": {
+                "p_1q": (
+                    (self.noise_multiplier - 1.0)
+                    * self.p1_initial / self.reference_depth
+                ),
+                "p_2q": (
+                    (self.noise_multiplier - 1.0)
+                    * self.p2_initial / self.reference_depth
+                ),
+                "gamma_1q": (
+                    (self.noise_multiplier - 1.0)
+                    * self.gamma1_initial / self.reference_depth
+                ),
+                "gamma_2q": (
+                    (self.noise_multiplier - 1.0)
+                    * self.gamma2_initial / self.reference_depth
+                ),
+            },
+            "parameters_at_depth_0": depth_noise_parameters(
+                0.0,
+                reference_depth=self.reference_depth,
+                noise_multiplier=self.noise_multiplier,
+                p1_initial=self.p1_initial,
+                p2_initial=self.p2_initial,
+                gamma1_initial=self.gamma1_initial,
+                gamma2_initial=self.gamma2_initial,
+            ),
+            "parameters_at_reference_depth": depth_noise_parameters(
+                self.reference_depth,
+                reference_depth=self.reference_depth,
+                noise_multiplier=self.noise_multiplier,
+                p1_initial=self.p1_initial,
+                p2_initial=self.p2_initial,
+                gamma1_initial=self.gamma1_initial,
+                gamma2_initial=self.gamma2_initial,
+            ),
+            "runtime": dict(self._runtime),
+        }
+
+
+def configure_aer_simulator_device(simulator, *, use_gpu: bool = False) -> str:
+    """Select CPU or GPU execution for an AerSimulator instance.
+
+    CPU is the default when ``use_gpu`` is False.  GPU mode requires a
+    GPU-enabled Qiskit Aer build and a compatible NVIDIA/CUDA environment.
+    The check is performed before circuit execution so an unavailable GPU
+    produces a direct, readable error instead of failing deep inside a job.
+
+    Returns the selected Aer device name (``"CPU"`` or ``"GPU"``).
+    """
+    requested = "GPU" if bool(use_gpu) else "CPU"
+
+    available_method = getattr(simulator, "available_devices", None)
+    available = None
+    if callable(available_method):
+        try:
+            available = tuple(str(value).upper() for value in available_method())
+        except Exception as error:
+            if use_gpu:
+                raise RuntimeError(
+                    "GPU execution was requested, but Aer could not query the "
+                    "available simulation devices. Check the GPU-enabled Qiskit "
+                    "Aer installation and CUDA/NVIDIA driver environment."
+                ) from error
+
+    if use_gpu and available is not None and "GPU" not in available:
+        displayed = ", ".join(available) if available else "none"
+        raise RuntimeError(
+            "USE_GPU=True, but this Qiskit Aer installation does not report a "
+            f"GPU device. Available Aer devices: {displayed}. Install a "
+            "GPU-enabled Qiskit Aer build on a compatible NVIDIA/CUDA machine, "
+            "or set USE_GPU=False to use the CPU."
+        )
+
+    try:
+        simulator.set_options(device=requested)
+    except Exception as error:
+        raise RuntimeError(
+            f"Aer could not select device={requested!r}. Check that the installed "
+            "Qiskit Aer build supports this device."
+        ) from error
+
+    return requested
 
 
 def make_fake_aer_backend(fake_backend_name: str, *, seed_simulator: int = 150,
-                           required_qubits: int | None = None):
+                           required_qubits: int | None = None,
+                           use_gpu: bool = False):
     """Create a noisy Aer simulator from an IBM fake-backend snapshot.
 
     The fake snapshot supplies coupling, basis gates, readout properties and
     device noise.  Aer performs the execution so mid-circuit measurement and
     if_test control flow can be simulated.  No custom NoiseController channels
-    should be appended when this backend mode is selected.
+    should be appended when this backend mode is selected.  ``use_gpu`` only
+    changes the machine used by Aer; it does not change the fake-device noise
+    snapshot or circuit semantics.
     """
     if not isinstance(fake_backend_name, str) or not fake_backend_name.strip():
         raise ValueError("FAKE_BACKEND_NAME must be a non-empty fake-backend class name.")
@@ -551,6 +987,7 @@ def make_fake_aer_backend(fake_backend_name: str, *, seed_simulator: int = 150,
             f"needs at least {int(required_qubits)} physical qubits."
         )
     simulator = AerSimulator.from_backend(snapshot_backend)
+    configure_aer_simulator_device(simulator, use_gpu=use_gpu)
     simulator.set_options(seed_simulator=int(seed_simulator))
     return snapshot_backend, simulator
 
