@@ -15,9 +15,11 @@ share a counted layer only when they act on disjoint qubits.
   If DEPTH ends inside any decomposed macro, the retained prefix remains one
   atomic component for local folding.
 
-The original U_GATES dictionary and all original theta variables are kept
-verbatim.  Select UNITARY_TYPE="random_type" to recover exactly those old
-1-4-qubit logical unitaries.
+The historical U_GATES dictionary and all original theta variables are kept
+verbatim.  The runtime random_type configuration preserves the exact historical
+1-3-qubit prefix, intentionally regularizes the 4-qubit pattern into an 8-depth
+repeat, and then extends each supported random_type circuit deterministically
+with seeded random angles.
 """
 
 from __future__ import annotations
@@ -145,8 +147,45 @@ U_GATES = {
     ],
 }
 
-# Explicit alias makes the preservation intent obvious.
-RANDOM_TYPE_U_GATES = U_GATES
+# ============================================================
+# Runtime fixed prefixes for random_type
+# ============================================================
+# Keep the historical dictionary above untouched so previously used 1-3 qubit
+# circuits can be reproduced exactly.  Four-qubit random_type had not yet been
+# used for experiments, so its runtime prefix is intentionally regularized.
+RANDOM_TYPE_U_GATES = copy.deepcopy(U_GATES)
+
+# 4q: exact 8-depth structural repeat.
+# Rotation layers repeat X - Y - X - Z, while the original CNOT schedule repeats.
+# The numerical angle values from the original first 16 layers are retained in
+# their original rotation-slot order; only the rotation axes are regularized.
+RANDOM_TYPE_U_GATES[4] = [
+    [("x", 0, theta_x1), ("x", 1, theta_x1),
+     ("x", 2, theta_x1), ("x", 3, theta_x1)],
+    [("cx", 0, 1), ("cx", 2, 3)],
+    [("y", 0, theta_y1), ("y", 1, theta_y1),
+     ("y", 2, theta_y1), ("y", 3, theta_y1)],
+    [("cx", 1, 2)],
+    [("x", 0, theta_z1), ("x", 1, theta_z1),
+     ("x", 2, theta_z1), ("x", 3, theta_z1)],
+    [("cx", 3, 2), ("cx", 1, 0)],
+    [("z", 0, theta_x2), ("z", 1, theta_x2),
+     ("z", 2, theta_x2), ("z", 3, theta_x2)],
+    [("cx", 2, 1)],
+
+    [("x", 0, theta_y2), ("x", 1, theta_y2),
+     ("x", 2, theta_y2), ("x", 3, theta_y2)],
+    [("cx", 0, 1), ("cx", 2, 3)],
+    [("y", 0, theta_z2), ("y", 1, theta_z2),
+     ("y", 2, theta_z2), ("y", 3, theta_z2)],
+    [("cx", 1, 2)],
+    [("x", 0, theta_x3), ("x", 1, theta_x3),
+     ("x", 2, theta_x3), ("x", 3, theta_x3)],
+    [("cx", 3, 2), ("cx", 1, 0)],
+    [("z", 0, theta_y3), ("z", 1, theta_y3),
+     ("z", 2, theta_y3), ("z", 3, theta_y3)],
+    [("cx", 2, 1)],
+]
 
 
 # ============================================================
@@ -191,8 +230,27 @@ class SelectedComponent:
     depth_stop: int
 
 
-NEW_TYPE_MIN_DEPTH = 60
+# Generated non-random circuit families are extended far enough for the planned
+# depth sweeps.  HEA circuits are generated only in COMPLETE repeating units:
+# local RY -> local RZ -> odd-edge matching A -> even-edge matching B.
+# For 2 qubits, matching B is empty.  Every generated HEA therefore ends on a
+# two-qubit entangler layer, never on an extra final rotation layer.
+NEW_TYPE_MIN_DEPTH = 128
+HEA_CZ_RZZ_2Q_TARGET_DEPTH = 120
+HEA_CZ_RZZ_3_TO_5Q_TARGET_DEPTH = 128
+HEA_CRZ_2Q_TARGET_DEPTH = 144
+HEA_CRZ_3_TO_5Q_TARGET_DEPTH = 120
 MAX_SUPPORTED_QUBITS = 5
+
+# random_type keeps the old fixed prefix and extends only the new tail.
+# 3q uses 126 rather than 120 so the final 9-depth repeat is not cut.
+RANDOM_TYPE_EXTENSION_SEED = 150
+RANDOM_TYPE_TARGET_DEPTHS = {
+    1: 120,
+    2: 120,
+    3: 126,
+    4: 128,
+}
 
 _LOGICAL_GATE_DEPTHS = {
     "rx": 1, "ry": 1, "rz": 1,
@@ -214,7 +272,10 @@ _ALLOWED_LOGICAL_GATES = {
 UNITARY_METADATA = {
     "random_type": {
         "minimum_qubits": 1,
-        "description": "Original fixed U_GATES; unchanged for 1-4 qubits.",
+        "description": (
+            "Historical fixed prefix extended deterministically with seeded random "
+            "angles; 4q uses an 8-depth X-Y-X-Z/CNOT repeat."
+        ),
     },
     "hea_cz": {
         "minimum_qubits": 2,
@@ -366,6 +427,89 @@ def _validate_components(unitary_type: str, n: int,
     return result
 
 
+def _random_type_extension_rng(n: int) -> random.Random:
+    """Dedicated deterministic RNG for only the added random_type tail."""
+    return random.Random(RANDOM_TYPE_EXTENSION_SEED + 1009 * int(n))
+
+
+def _random_type_extra_layer(n: int, layer_index: int,
+                             rng: random.Random):
+    """Return one added legacy-style layer for random_type.
+
+    layer_index is zero-based over the complete runtime sequence.  Existing
+    fixed-prefix layers are never regenerated, so changing the extension seed
+    cannot alter previously completed 1-3q experiments.
+    """
+    if n == 1:
+        axis = ("x", "y", "z")[layer_index % 3]
+        return [(axis, 0, _wide_angle(rng))]
+
+    if n == 2:
+        # Odd 1-based layers: X/Y/Z rotations on both qubits.
+        # Even 1-based layers: CNOT direction alternates globally forever.
+        one_based = layer_index + 1
+        if one_based % 2 == 1:
+            rotation_slot = (one_based + 1) // 2
+            axis = ("x", "y", "z")[(rotation_slot - 1) % 3]
+            angle = _wide_angle(rng)
+            return [(axis, 0, angle), (axis, 1, angle)]
+        cx_slot = one_based // 2
+        return [("cx", 0, 1)] if cx_slot % 2 == 1 else [("cx", 1, 0)]
+
+    if n == 3:
+        # Exact 9-depth repeat retained from the historical 3q sequence.
+        position = layer_index % 9
+        if position == 0:
+            angle = _wide_angle(rng)
+            return [("x", 0, angle), ("x", 1, angle)]
+        if position == 1:
+            return [("cx", 0, 1)]
+        if position == 2:
+            return [("cx", 1, 2)]
+        if position == 3:
+            angle = _wide_angle(rng)
+            return [("y", 1, angle), ("y", 2, angle)]
+        if position == 4:
+            return [("cx", 2, 1)]
+        if position == 5:
+            return [("cx", 0, 1)]
+        if position == 6:
+            angle = _wide_angle(rng)
+            return [("z", 0, angle), ("z", 2, angle)]
+        if position == 7:
+            return [("cx", 1, 2)]
+        return [("cx", 2, 1)]
+
+    if n == 4:
+        # Exact 8-depth repeat requested for the new 4q experiments.
+        # Rotation-axis order inside every repeat is X - Y - X - Z.
+        position = layer_index % 8
+        if position == 0:
+            angle = _wide_angle(rng)
+            return [("x", q, angle) for q in range(4)]
+        if position == 1:
+            return [("cx", 0, 1), ("cx", 2, 3)]
+        if position == 2:
+            angle = _wide_angle(rng)
+            return [("y", q, angle) for q in range(4)]
+        if position == 3:
+            return [("cx", 1, 2)]
+        if position == 4:
+            angle = _wide_angle(rng)
+            return [("x", q, angle) for q in range(4)]
+        if position == 5:
+            return [("cx", 3, 2), ("cx", 1, 0)]
+        if position == 6:
+            angle = _wide_angle(rng)
+            return [("z", q, angle) for q in range(4)]
+        return [("cx", 2, 1)]
+
+    raise ValueError(
+        "UNITARY_TYPE='random_type' supports only 1-4 qubits. "
+        "No historical 5-qubit random_type pattern exists."
+    )
+
+
 def _legacy_random_components(n: int) -> tuple[ComponentSpec, ...]:
     if n not in RANDOM_TYPE_U_GATES:
         raise ValueError(
@@ -373,17 +517,22 @@ def _legacy_random_components(n: int) -> tuple[ComponentSpec, ...]:
             "The original U_config.py did not define a 5-qubit random_type."
         )
 
+    layers = copy.deepcopy(RANDOM_TYPE_U_GATES[n])
+    target_depth = int(RANDOM_TYPE_TARGET_DEPTHS[n])
+    rng = _random_type_extension_rng(n)
+
+    while len(layers) < target_depth:
+        layers.append(_random_type_extra_layer(n, len(layers), rng))
+
     converted = []
     axis_map = {"x": "rx", "y": "ry", "z": "rz"}
 
-    for j, layer in enumerate(RANDOM_TYPE_U_GATES[n]):
+    for j, layer in enumerate(layers):
         gates = []
 
         for legacy in layer:
             if legacy[0] == "cx":
-                gates.append(
-                    _gate("cx", legacy[1], legacy[2])
-                )
+                gates.append(_gate("cx", legacy[1], legacy[2]))
             else:
                 gates.append(
                     _gate(
@@ -403,13 +552,47 @@ def _legacy_random_components(n: int) -> tuple[ComponentSpec, ...]:
 
     return tuple(converted)
 
+def _hea_target_depth(unitary_type: str, n: int) -> int:
+    """Return the planned HEA maximum depth at a complete repeat boundary."""
+    if unitary_type in {"hea_cz", "hea_rzz"}:
+        return (
+            HEA_CZ_RZZ_2Q_TARGET_DEPTH
+            if n == 2
+            else HEA_CZ_RZZ_3_TO_5Q_TARGET_DEPTH
+        )
+    if unitary_type == "hea_crz":
+        return (
+            HEA_CRZ_2Q_TARGET_DEPTH
+            if n == 2
+            else HEA_CRZ_3_TO_5Q_TARGET_DEPTH
+        )
+    return NEW_TYPE_MIN_DEPTH
+
 
 def _generate_hea(unitary_type: str, n: int, entangler: str) -> tuple[ComponentSpec, ...]:
+    """Generate complete alternating-edge HEA repeats.
+
+    One repeat is
+
+        RY(all) -> RZ(all) -> matching A -> matching B,
+
+    with matching A = (0,1), (2,3), ... and matching B = (1,2),
+    (3,4), ... .  Empty matchings are skipped, so for 2 qubits one repeat is
+    simply RY -> RZ -> A.
+
+    Importantly, there is NO extra final RY/RZ stage.  Every repeat and every
+    allowed stopping boundary ends on the final two-qubit matching of that
+    repeat.  This restores the original HEA generation order, preserving the
+    deterministic seeded parameters of all previously generated prefixes while
+    extending the sequence to the larger planned depths.
+    """
     rng = _fixed_rng(unitary_type, n)
     match_a, match_b = _chain_matchings(n)
     components: list[ComponentSpec] = []
+    target_depth = _hea_target_depth(unitary_type, n)
     block = 0
-    while _component_depth_sum(components) < NEW_TYPE_MIN_DEPTH:
+
+    while _component_depth_sum(components) < target_depth:
         components.append(_component(
             f"{unitary_type}_B{block}_RY",
             [_gate("ry", q, angle=_wide_angle(rng)) for q in range(n)],
@@ -420,6 +603,7 @@ def _generate_hea(unitary_type: str, n: int, entangler: str) -> tuple[ComponentS
             [_gate("rz", q, angle=_wide_angle(rng)) for q in range(n)],
             unitary_type,
         ))
+
         for matching_name, edges in (("A", match_a), ("B", match_b)):
             if not edges:
                 continue
@@ -430,7 +614,16 @@ def _generate_hea(unitary_type: str, n: int, entangler: str) -> tuple[ComponentS
             components.append(_component(
                 f"{unitary_type}_B{block}_{matching_name}", gates, unitary_type
             ))
+
         block += 1
+
+    total_depth = _component_depth_sum(components)
+    if total_depth != target_depth:
+        raise AssertionError(
+            f"{unitary_type} with {n} qubits generated depth {total_depth}, "
+            f"but target depth {target_depth} is not a complete repeat boundary."
+        )
+
     return tuple(components)
 
 
@@ -660,7 +853,12 @@ def selected_unitary_summary(unitary_type: str, num_qubits: int, depth: int) -> 
     )
 
 
-# Defensive import-time check for the preserved historical dictionary.
+# Defensive import-time checks.
 _ORIGINAL_LENGTHS = {1: 18, 2: 18, 3: 18, 4: 16}
 if {n: len(layers) for n, layers in U_GATES.items()} != _ORIGINAL_LENGTHS:
-    raise AssertionError("The preserved random_type U_GATES lengths were changed.")
+    raise AssertionError("The historical U_GATES dictionary lengths were changed.")
+if any(RANDOM_TYPE_U_GATES[n][:len(U_GATES[n])] != U_GATES[n]
+       for n in (1, 2, 3)):
+    raise AssertionError("The historical 1-3q random_type prefixes were changed.")
+if len(RANDOM_TYPE_U_GATES[4]) != 16:
+    raise AssertionError("The fixed 4q random_type prefix must remain 16 layers.")
