@@ -1,0 +1,2 @@
+chmod +x setup_gpu_environment.sh
+./setup_gpu_environment.sh
