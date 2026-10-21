@@ -26,6 +26,16 @@ from unitary_tools import (
 )
 from state_preparation import *
 
+from zne_cli import (
+    override,
+    parse_cli_args,
+    resolve_backend_flags,
+    resolve_machine_flags,
+    resolve_noise_flags,
+)
+
+_CLI_ARGS = parse_cli_args('local depth-reduced ZNE experiment')
+
 from local_folding_helpers import (
     make_local_plan,
     build_intermediate_local_circuit,
@@ -39,10 +49,16 @@ from local_folding_helpers import (
 # Real hardware and local simulation are mutually exclusive.
 # For Aer simulation, USE_GPU=True selects Aer device="GPU".
 # When USE_GPU=False, local simulation uses the CPU.
-USE_REAL_HARDWARE = False
-USE_GPU = False
+USE_REAL_HARDWARE, USE_GPU = resolve_machine_flags(
+    _CLI_ARGS.machine,
+    default_use_real_hardware=False,
+    default_use_gpu=False,
+)
 
-REAL_HARDWARE_DEVICE_NAME = False
+REAL_HARDWARE_DEVICE_NAME = override(
+    False,
+    _CLI_ARGS.real_hardware_device_name,
+)
 # REAL_HARDWARE_DEVICE_NAME = "ibm_strasbourg"
 
 # ============================================================
@@ -50,13 +66,20 @@ REAL_HARDWARE_DEVICE_NAME = False
 # ============================================================
 # These flags apply only when USE_REAL_HARDWARE=False.
 # Select exactly one of the three simulation backends.
-USE_AER_SIMULATOR = True       # shot-based Aer, with optional custom noise
-USE_STATEVECTOR = False        # exact noiseless Aer statevector
-USE_FAKE_BACKEND = False       # IBM fake-device snapshot executed by Aer
+USE_AER_SIMULATOR, USE_STATEVECTOR, USE_FAKE_BACKEND = resolve_backend_flags(
+    _CLI_ARGS.backend,
+    use_real_hardware=USE_REAL_HARDWARE,
+    default_use_aer_simulator=True,
+    default_use_statevector=False,
+    default_use_fake_backend=False,
+)
 
 # Fake-backend mode uses an IBM fake-device snapshot to configure Aer.
 # The snapshot supplies the device noise model; custom channels are disabled.
-FAKE_BACKEND_NAME = "FakeQuebec"
+FAKE_BACKEND_NAME = override(
+    "FakeQuebec",
+    _CLI_ARGS.fake_backend_name,
+)
 # Available modern examples (qiskit_ibm_runtime.fake_provider):
 #   FakeSherbrooke, FakeBrisbane, FakeKyiv, FakeKyoto, FakeOsaka,
 #   FakeQuebec, FakeStrasbourg, FakeTorino, FakeBrussels, FakeKawasaki,
@@ -96,7 +119,10 @@ else:
         )
     SIMULATION_DEVICE = "GPU" if USE_GPU else "CPU"
 
-shots = 10**3  # Used by shot-based Aer/fake/hardware; ignored by statevector.
+shots = int(override(
+    10**3,
+    _CLI_ARGS.shots,
+))  # Used by shot-based Aer/fake/hardware; ignored by statevector.
 
 # ============================================================
 # Gate-count-axis extrapolation report
@@ -109,9 +135,12 @@ shots = 10**3  # Used by shot-based Aer/fake/hardware; ignored by statevector.
 #
 # The report is JSON and is overwritten when the same qubit/unitary/method
 # combination is run again.
-REPORT_DIRECTORY = "./zne_reports"
-GATE_WEIGHT_1Q = 0.3
-GATE_WEIGHT_2Q = 0.7
+REPORT_DIRECTORY = str(override(
+    "./zne_reports",
+    _CLI_ARGS.report_directory,
+))
+GATE_WEIGHT_1Q = float(override(0.3, _CLI_ARGS.gate_weight_1q))
+GATE_WEIGHT_2Q = float(override(0.7, _CLI_ARGS.gate_weight_2q))
 
 
 # ============================================================
@@ -120,9 +149,9 @@ GATE_WEIGHT_2Q = 0.7
 #   random_type, hea_cz, hea_crx, hea_crz, hea_rzz,
 #   qaoa, qaoa_xy, clifford_only
 # ============================================================
-UNITARY_TYPE = "random_type"
-DEPTH = 18
-NUM_U_QUBITS = 2
+UNITARY_TYPE = str(override("random_type", _CLI_ARGS.unitary))
+DEPTH = int(override(18, _CLI_ARGS.depth))
+NUM_U_QUBITS = int(override(2, _CLI_ARGS.num_qubits))
 
 # Physical pool = NUM_U_QUBITS * fold factor, independent of DEPTH.
 # "fixed": permanent lanes. "dynamic": shared free/reset workspace.
@@ -151,12 +180,18 @@ CHECK_MAX_BRANCHES = 4096
 CHECK_PRINT_EACH = True
 
 # Guard against accidentally constructing an impractically wide simulator job.
-MAX_SIMULATOR_PHYSICAL_QUBITS = 24
+MAX_SIMULATOR_PHYSICAL_QUBITS = int(override(
+    24,
+    _CLI_ARGS.max_simulator_physical_qubits,
+))
 
 # ============================================================
 # Number of foldings
 # ============================================================
-depth_folded_circuits = [1, 3, 5, 7]
+depth_folded_circuits = list(override(
+    [1, 3, 5, 7],
+    _CLI_ARGS.fold_factors,
+))
 
 # ============================================================
 # Custom noise configuration for USE_AER_SIMULATOR
@@ -173,13 +208,17 @@ depth_folded_circuits = [1, 3, 5, 7]
 # custom-noise flags.  Aer with every custom-noise flag False is noiseless,
 # shot-based Aer and remains available for backward compatibility.
 # ============================================================
-USE_CONSTANT_DEPOLARIZING = True
-USE_CONSTANT_AMPLITUDE_DAMPING = False
-USE_CONSTANT_PHASE_DAMPING = False
-USE_CONSTANT_COHERENT_OVERROTATION = False
-
-USE_INCREASING_RANDOM_PAULI = False
-USE_INCREASING_AMPLITUDE_DAMPING = False
+(
+    USE_CONSTANT_DEPOLARIZING,
+    USE_CONSTANT_AMPLITUDE_DAMPING,
+    USE_CONSTANT_PHASE_DAMPING,
+    USE_CONSTANT_COHERENT_OVERROTATION,
+    USE_INCREASING_RANDOM_PAULI,
+    USE_INCREASING_AMPLITUDE_DAMPING,
+) = resolve_noise_flags(
+    _CLI_ARGS.noise,
+    defaults=(True, False, False, False, False, False),
+)
 
 # Historical constant-noise strengths (same semantics as before).
 depolarizing_strength = 0.02
@@ -188,7 +227,7 @@ phase_damping_strength = 0.02
 overrotation_epsilon = 0.02
 
 # Reproducible depth-dependent random-Pauli assignments and Aer sampling.
-BASE_SEED = 150
+BASE_SEED = int(override(150, _CLI_ARGS.base_seed))
 
 # p(D) = p0 * [1 + (NOISE_MULTIPLIER - 1) * D / REFERENCE_DEPTH].
 # The model is not capped beyond REFERENCE_DEPTH.  An explicit error is raised
@@ -582,15 +621,38 @@ def _machine_name_for_report():
     return "real_hardware" if USE_REAL_HARDWARE else str(SIMULATION_DEVICE)
 
 
-def _execution_filename_tag():
-    """Filename tag for machine/backend without a redundant AerSimulator label.
+def _noise_filename_tag():
+    """Compact noise label used to prevent report-file overwrites."""
+    if USE_FAKE_BACKEND:
+        return None
+    if USE_STATEVECTOR:
+        return None
+    if USE_REAL_HARDWARE:
+        return None
 
-    Examples:
-      plain Aer CPU/GPU -> CPU or GPU
-      statevector       -> CPU_statevector or GPU_statevector
-      fake backend      -> CPU_FakeQuebec or GPU_FakeQuebec
-      real hardware     -> ibm_backend_name
-    """
+    if USE_INCREASING_RANDOM_PAULI and USE_INCREASING_AMPLITUDE_DAMPING:
+        return "increasing_pauli_amplitude_damping"
+    if USE_INCREASING_RANDOM_PAULI:
+        return "increasing_pauli"
+    if USE_INCREASING_AMPLITUDE_DAMPING:
+        return "increasing_amplitude_damping"
+
+    constant = []
+    if USE_CONSTANT_DEPOLARIZING:
+        constant.append("depolarizing")
+    if USE_CONSTANT_AMPLITUDE_DAMPING:
+        constant.append("amplitude_damping")
+    if USE_CONSTANT_PHASE_DAMPING:
+        constant.append("phase_damping")
+    if USE_CONSTANT_COHERENT_OVERROTATION:
+        constant.append("coherent_overrotation")
+    if constant:
+        return "constant_" + "_".join(constant)
+    return "noiseless"
+
+
+def _execution_filename_tag():
+    """Unique machine/backend/noise tag for report and plot filenames."""
     if USE_REAL_HARDWARE:
         return _safe_filename_tag(_real_hardware_backend_name())
 
@@ -599,7 +661,9 @@ def _execution_filename_tag():
         parts.append("statevector")
     elif USE_FAKE_BACKEND:
         parts.append(_safe_filename_tag(FAKE_BACKEND_NAME))
-    return "_".join(parts)
+    else:
+        parts.append(_noise_filename_tag())
+    return "_".join(part for part in parts if part)
 
 
 def _noise_report():
@@ -696,6 +760,7 @@ def _write_report(method_name, expectations, raw_counts, transpiled_counts,
             "backend_mode": _backend_mode_name(),
             "backend_name": _backend_name_for_report(),
             "filename_tag": _execution_filename_tag(),
+            "noise_filename_tag": _noise_filename_tag(),
             "shots": None if USE_STATEVECTOR else int(shots),
         },
         "noise": _noise_report(),
