@@ -54,6 +54,7 @@ class Job:
     gate_weight_1q: float
     gate_weight_2q: float
     max_simulator_physical_qubits: int
+    depth_round: int
 
     @property
     def report_filename(self) -> str:
@@ -99,19 +100,29 @@ def _selected_names(value: Any, all_names: Iterable[str]) -> list[str]:
     return [str(item) for item in _as_list(value)]
 
 
-def _iter_experiment_points(experiment: dict[str, Any]) -> Iterator[tuple[int, int]]:
+def _iter_experiment_points(
+    experiment: dict[str, Any],
+) -> Iterator[tuple[int, int, int]]:
+    """Yield (num_qubits, depth, depth_round) in depth-major order."""
     mapping = experiment.get("depths_by_num_qubits")
     if mapping is not None:
-        for qubits, depths in mapping.items():
-            for depth in _as_list(depths):
-                yield int(qubits), int(depth)
+        normalized = {
+            int(qubits): [int(depth) for depth in _as_list(depths)]
+            for qubits, depths in mapping.items()
+        }
+        max_rounds = max((len(depths) for depths in normalized.values()), default=0)
+        for depth_round in range(max_rounds):
+            for qubits in sorted(normalized):
+                depths = normalized[qubits]
+                if depth_round < len(depths):
+                    yield qubits, depths[depth_round], depth_round
         return
 
-    qubits_values = _as_list(experiment["num_qubits"])
-    depth_values = _as_list(experiment["depth"])
-    for qubits in qubits_values:
-        for depth in depth_values:
-            yield int(qubits), int(depth)
+    qubits_values = sorted(int(value) for value in _as_list(experiment["num_qubits"]))
+    depth_values = [int(value) for value in _as_list(experiment["depth"])]
+    for depth_round, depth in enumerate(depth_values):
+        for qubits in qubits_values:
+            yield qubits, depth, depth_round
 
 
 def _merged(common: dict[str, Any], experiment: dict[str, Any]) -> dict[str, Any]:
@@ -161,9 +172,13 @@ def _build_jobs(
     method_files = dict(cfg.METHOD_FILES)
     all_methods = list(method_files)
     all_profiles = list(cfg.EXECUTION_PROFILES)
+    method_order = {name: index for index, name in enumerate(all_methods)}
+    profile_default_order = {
+        name: index for index, name in enumerate(all_profiles)
+    }
 
     raw_jobs: list[dict[str, Any]] = []
-    for experiment in cfg.EXPERIMENTS:
+    for experiment_order, experiment in enumerate(cfg.EXPERIMENTS):
         if not experiment.get("enabled", True):
             continue
         experiment_name = str(experiment["name"])
@@ -186,7 +201,7 @@ def _build_jobs(
         if unknown_profiles:
             raise ValueError(f"Unknown profiles in {experiment_name}: {sorted(unknown_profiles)}")
 
-        for num_qubits, depth in _iter_experiment_points(merged):
+        for num_qubits, depth, depth_round in _iter_experiment_points(merged):
             fold_factor_values = _value_for_num_qubits(
                 merged,
                 "fold_factors",
@@ -226,7 +241,34 @@ def _build_jobs(
                         "max_simulator_physical_qubits": int(merged.get(
                             "max_simulator_physical_qubits", 24
                         )),
+                        "depth_round": int(depth_round),
+                        "_sort_key": (
+                            int(profile.get("batch_phase", 0)),
+                            int(depth_round),
+                            # Finish the low-cost circuit-folding jobs before
+                            # global/local jobs in the same depth round.
+                            int(method_order[method]),
+                            # Within global/local, prefer fewer estimated wires.
+                            # With 5q folds [1,3,5], 25-wire 5q jobs run before
+                            # 28-wire 4q jobs, reducing the chance that one heavy
+                            # 4q job blocks all 5q results.
+                            int(
+                                num_qubits * max(fold_factors)
+                                if method in {"global", "local"}
+                                else num_qubits
+                            ),
+                            int(num_qubits),
+                            int(experiment_order),
+                            int(profile.get(
+                                "order_priority",
+                                profile_default_order[profile_name],
+                            )),
+                        ),
                     })
+
+    raw_jobs.sort(key=lambda item: item["_sort_key"])
+    for raw in raw_jobs:
+        raw.pop("_sort_key", None)
 
     total = len(raw_jobs)
     return [Job(index=i + 1, total=total, **raw) for i, raw in enumerate(raw_jobs)]
@@ -285,8 +327,11 @@ def _validate_jobs(jobs: list[Job], u_config) -> list[str]:
                 f"Job {job.index}: profile {job.profile_name!r} does not allow "
                 f"{job.num_qubits} qubits."
             )
-        if job.backend == "fake_backend" and job.noise != "none":
-            raise ValueError("Fake backend profiles must use noise='none'.")
+        if job.backend in {"fake_backend", "fake_statevector"} and job.noise != "none":
+            raise ValueError(
+                "Fake-backend profiles must use noise='none'; the snapshot "
+                "already supplies its device noise model."
+            )
         if job.backend == "aer_simulator" and job.noise == "none":
             warnings.append(f"Job {job.index}: AerSimulator is configured without custom noise.")
 
@@ -395,6 +440,7 @@ def _run_child(
     log_path: Path,
     stream_output: bool,
     progress_seconds: float,
+    timeout_seconds: float | None,
     heartbeat,
 ) -> int:
     """Run one main file, always saving full output to its per-job log.
@@ -440,14 +486,26 @@ def _run_child(
             start_new_session=True,
         )
         start = time.monotonic()
+        poll_interval = progress_seconds if progress_seconds > 0 else 30.0
         try:
-            if progress_seconds <= 0:
-                return process.wait()
             while True:
+                elapsed = time.monotonic() - start
+                if timeout_seconds is not None and elapsed >= timeout_seconds:
+                    log.write(
+                        f"\nBATCH TIMEOUT: exceeded {timeout_seconds:.0f} seconds; "
+                        "terminating process group.\n"
+                    )
+                    log.flush()
+                    _terminate_process_group(process)
+                    return 124
+                wait_for = poll_interval
+                if timeout_seconds is not None:
+                    wait_for = min(wait_for, max(0.1, timeout_seconds - elapsed))
                 try:
-                    return process.wait(timeout=progress_seconds)
+                    return process.wait(timeout=wait_for)
                 except subprocess.TimeoutExpired:
-                    heartbeat(time.monotonic() - start)
+                    if progress_seconds > 0:
+                        heartbeat(time.monotonic() - start)
         except KeyboardInterrupt:
             _terminate_process_group(process)
             raise
@@ -611,6 +669,14 @@ def main() -> int:
     )
     if progress_seconds < 0:
         raise ValueError("--progress-seconds must be zero or positive.")
+    configured_timeout = getattr(cfg, "JOB_TIMEOUT_SECONDS", None)
+    timeout_seconds = (
+        None
+        if configured_timeout in (None, 0, 0.0)
+        else float(configured_timeout)
+    )
+    if timeout_seconds is not None and timeout_seconds <= 0:
+        raise ValueError("JOB_TIMEOUT_SECONDS must be positive, 0, or None.")
 
     print("=" * 88)
     print("ZNE BATCH PLAN")
@@ -621,6 +687,10 @@ def main() -> int:
     if not stream_output:
         print(f"Heartbeat       : every {progress_seconds:g} s (0 disables it)")
     print(f"GPU visible     : {cfg.CUDA_VISIBLE_DEVICES}")
+    print(
+        "Job timeout     : "
+        + ("disabled" if timeout_seconds is None else _format_duration(timeout_seconds))
+    )
     print("=" * 88)
 
     for warning in dict.fromkeys(warnings):
@@ -708,12 +778,14 @@ def main() -> int:
             log_path=log_path,
             stream_output=stream_output,
             progress_seconds=progress_seconds,
+            timeout_seconds=timeout_seconds,
             heartbeat=heartbeat,
         )
         runtime = time.monotonic() - start
 
         report_valid = returncode == 0 and _valid_existing_report(job)
-        status = "success" if report_valid else "failed"
+        timed_out = returncode == 124
+        status = "success" if report_valid else "timeout" if timed_out else "failed"
         if report_valid:
             new_successes += 1
             print(
@@ -725,8 +797,9 @@ def main() -> int:
             )
         else:
             failures += 1
+            failure_label = "TIMEOUT" if timed_out else "FAILED "
             print(
-                f"[{job.index:04d}/{job.total:04d}] FAILED  | {_job_description(job)} | "
+                f"[{job.index:04d}/{job.total:04d}] {failure_label} | {_job_description(job)} | "
                 f"rc={returncode} | job={_format_duration(runtime)} | "
                 f"batch={_format_duration(time.monotonic() - batch_start)} | "
                 f"{_progress_counts(new_successes, failures, skipped)}",

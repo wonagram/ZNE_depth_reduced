@@ -28,6 +28,11 @@ PROGRESS_UPDATE_SECONDS = 30
 # Continue to the next job after a failure.
 STOP_ON_FAILURE = False
 
+# Prevent one unexpectedly expensive simulation from blocking every later job.
+# A timed-out child process is terminated, recorded as FAILED/TIMEOUT, and the
+# batch continues. Set to 0 or None to disable the timeout.
+JOB_TIMEOUT_SECONDS = 5 * 60 * 60  # 5 hours per job
+
 # Select the visible NVIDIA GPU(s). "0" means the first GPU.
 CUDA_VISIBLE_DEVICES = "0"
 
@@ -49,7 +54,14 @@ METHOD_FILES = {
 COMMON = {
     "machine": "gpu",
     "methods": "all",
-    "profiles": "all",
+    # The dedicated FakeQuebec smoke profile is excluded here and is used only
+    # by the small first experiment below.
+    "profiles": [
+        "aer_constant_depolarizing",
+        "aer_increasing_pauli",
+        "aer_increasing_pauli_amplitude_damping",
+        "fake_quebec_statevector",
+    ],
     "shots": 1000,
     # Default folding factors for 1-4 logical qubits.
     "fold_factors": [1, 3, 5, 7],
@@ -76,35 +88,52 @@ COMMON = {
 # Four requested backend/noise profiles
 # ============================================================
 EXECUTION_PROFILES = {
-    "fake_quebec": {
-        "backend": "fake_backend",
+    # Phase -1: a small three-method smoke test runs before everything else so
+    # a backend/API incompatibility is discovered before the overnight batch.
+    "fake_quebec_statevector_smoke": {
+        "backend": "fake_statevector",
         "fake_backend_name": "FakeQuebec",
         "noise": "none",
-        "report_tag": "GPU_FakeQuebec",
-
-        # The fake-device global/local simulations became prohibitively slow
-        # beyond 2 logical qubits, so the batch runner creates FakeQuebec jobs
-        # only for the 2q experiment points.
+        "report_tag": "GPU_FakeQuebec_statevector",
         "allowed_num_qubits": [2],
+        "batch_phase": -1,
+        "order_priority": 0,
     },
+
+    # Phase 0: custom-Aer profiles run first in depth-round order.
     "aer_constant_depolarizing": {
         "backend": "aer_simulator",
         "noise": "constant_depolarizing",
         "report_tag": "GPU_constant_depolarizing",
+        "batch_phase": 0,
+        "order_priority": 0,
     },
     "aer_increasing_pauli": {
         "backend": "aer_simulator",
         "noise": "increasing_random_pauli",
-        # The capped-noise formula is stored inside each JSON report.
-        # The filename keeps the compact historical noise label.
         "report_tag": "GPU_increasing_pauli",
+        "batch_phase": 0,
+        "order_priority": 1,
     },
     "aer_increasing_pauli_amplitude_damping": {
         "backend": "aer_simulator",
         "noise": "increasing_random_pauli_amplitude_damping",
-        # Same capped scale: 3x at D=100 and 4x from D=150 onward.
-        # Detailed scale values remain in the JSON report metadata.
         "report_tag": "GPU_increasing_pauli_amplitude_damping",
+        "batch_phase": 0,
+        "order_priority": 2,
+    },
+
+    # Phase 1 runs last. This is not the ideal statevector backend: FakeQuebec
+    # snapshot noise remains active, Aer is forced to statevector trajectories,
+    # results use finite shots, and shot branching is enabled.
+    "fake_quebec_statevector": {
+        "backend": "fake_statevector",
+        "fake_backend_name": "FakeQuebec",
+        "noise": "none",
+        "report_tag": "GPU_FakeQuebec_statevector",
+        "allowed_num_qubits": [2, 3, 4, 5],
+        "batch_phase": 1,
+        "order_priority": 0,
     },
 }
 
@@ -113,8 +142,24 @@ EXECUTION_PROFILES = {
 #
 # Each group may use depths_by_num_qubits when different qubit counts require
 # different complete-repeat boundaries. Add as many groups as needed.
+#
+# Jobs are depth-major rather than qubit-major: every first-depth point across
+# qubits/circuits is attempted before the second depth round. random_type joins
+# by ordinal round even though its numerical depths differ.
 # ============================================================
 EXPERIMENTS = [
+    # This tests circuit folding, global, and local dynamic execution with the
+    # new FakeQuebec statevector-trajectory backend before the overnight jobs.
+    {
+        "name": "fake_quebec_statevector_smoke_test",
+        "unitary": "hea_cz",
+        "profiles": ["fake_quebec_statevector_smoke"],
+        "methods": "all",
+        "depths_by_num_qubits": {
+            2: [30],
+        },
+    },
+
     {
         "name": "hea_cz_complete_repeats",
         "unitary": "hea_cz",
