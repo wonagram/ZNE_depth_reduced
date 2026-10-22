@@ -120,6 +120,37 @@ def _merged(common: dict[str, Any], experiment: dict[str, Any]) -> dict[str, Any
     return result
 
 
+def _value_for_num_qubits(
+    settings: dict[str, Any],
+    key: str,
+    num_qubits: int,
+    default: Any,
+) -> Any:
+    """Return a per-qubit override such as fold_factors_by_num_qubits.
+
+    Integer and string dictionary keys are both accepted so the configuration
+    remains easy to edit or load from JSON-like sources.
+    """
+    mapping = settings.get(f"{key}_by_num_qubits")
+    if mapping is None:
+        return default
+    if not isinstance(mapping, dict):
+        raise TypeError(f"{key}_by_num_qubits must be a dictionary.")
+    if num_qubits in mapping:
+        return mapping[num_qubits]
+    string_key = str(num_qubits)
+    if string_key in mapping:
+        return mapping[string_key]
+    return default
+
+
+def _profile_allows_num_qubits(profile: dict[str, Any], num_qubits: int) -> bool:
+    allowed = profile.get("allowed_num_qubits")
+    if allowed is None:
+        return True
+    return int(num_qubits) in {int(value) for value in _as_list(allowed)}
+
+
 def _build_jobs(
     project_root: Path,
     *,
@@ -156,8 +187,18 @@ def _build_jobs(
             raise ValueError(f"Unknown profiles in {experiment_name}: {sorted(unknown_profiles)}")
 
         for num_qubits, depth in _iter_experiment_points(merged):
+            fold_factor_values = _value_for_num_qubits(
+                merged,
+                "fold_factors",
+                num_qubits,
+                merged.get("fold_factors", [1, 3, 5, 7]),
+            )
+            fold_factors = tuple(int(value) for value in _as_list(fold_factor_values))
+
             for profile_name in profiles:
                 profile = dict(cfg.EXECUTION_PROFILES[profile_name])
+                if not _profile_allows_num_qubits(profile, num_qubits):
+                    continue
                 for method in methods:
                     raw_jobs.append({
                         "experiment_name": experiment_name,
@@ -178,9 +219,7 @@ def _build_jobs(
                         ).resolve(),
                         "report_tag": str(profile["report_tag"]),
                         "shots": int(merged.get("shots", 1000)),
-                        "fold_factors": tuple(int(v) for v in merged.get(
-                            "fold_factors", [1, 3, 5, 7]
-                        )),
+                        "fold_factors": fold_factors,
                         "base_seed": int(merged.get("base_seed", 150)),
                         "gate_weight_1q": float(merged.get("gate_weight_1q", 0.3)),
                         "gate_weight_2q": float(merged.get("gate_weight_2q", 0.7)),
@@ -228,6 +267,23 @@ def _validate_jobs(jobs: list[Job], u_config) -> list[str]:
             warnings.append(
                 f"Job {job.index}: machine={job.machine!r}; the supplied experiment "
                 "plan was intended for GPU execution."
+            )
+        if not job.fold_factors:
+            raise ValueError(f"Job {job.index}: fold_factors must not be empty.")
+        if any(value < 1 or value % 2 == 0 for value in job.fold_factors):
+            raise ValueError(
+                f"Job {job.index}: fold_factors must be positive odd integers."
+            )
+        if tuple(sorted(set(job.fold_factors))) != job.fold_factors:
+            raise ValueError(
+                f"Job {job.index}: fold_factors must be strictly increasing and unique."
+            )
+
+        profile = dict(cfg.EXECUTION_PROFILES[job.profile_name])
+        if not _profile_allows_num_qubits(profile, job.num_qubits):
+            raise ValueError(
+                f"Job {job.index}: profile {job.profile_name!r} does not allow "
+                f"{job.num_qubits} qubits."
             )
         if job.backend == "fake_backend" and job.noise != "none":
             raise ValueError("Fake backend profiles must use noise='none'.")

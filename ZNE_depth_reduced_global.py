@@ -142,13 +142,13 @@ GATE_WEIGHT_2Q = float(override(0.7, _CLI_ARGS.gate_weight_2q))
 #   qaoa, qaoa_xy, clifford_only
 # ============================================================
 UNITARY_TYPE = str(override("random_type", _CLI_ARGS.unitary))
-DEPTH = int(override(18, _CLI_ARGS.depth))
-NUM_U_QUBITS = int(override(2, _CLI_ARGS.num_qubits))
+DEPTH = int(override(32, _CLI_ARGS.depth))
+NUM_U_QUBITS = int(override(3, _CLI_ARGS.num_qubits))
 
 # ============================================================
 # Circuit drawing
 # ============================================================
-DRAW_CIRCUIT = False
+DRAW_CIRCUIT = True
 DRAW_DEPTH_FOLDED = 3
 
 # ============================================================

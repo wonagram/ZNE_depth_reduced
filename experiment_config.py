@@ -51,14 +51,24 @@ COMMON = {
     "methods": "all",
     "profiles": "all",
     "shots": 1000,
+    # Default folding factors for 1-4 logical qubits.
     "fold_factors": [1, 3, 5, 7],
+
+    # Per-qubit override understood by run_experiments.py.  The 5q global/local
+    # circuits would otherwise use 5*7=35 physical wires.  Restricting 5q to
+    # [1, 3, 5] lowers the maximum to 5*5=25 physical wires.
+    "fold_factors_by_num_qubits": {
+        5: [1, 3, 5],
+    },
+
     "base_seed": 150,
     "gate_weight_1q": 0.3,
     "gate_weight_2q": 0.7,
 
-    # Local folding uses NUM_U_QUBITS * max(fold_factors) physical wires.
-    # 5q with fold 7 therefore needs a 35-wire circuit. Raising this guard only
-    # permits construction; it does not guarantee that GPU memory is sufficient.
+    # Global/local folding use NUM_U_QUBITS * max(fold_factors) physical
+    # wires in the current construction.  With the override above, 5q uses at
+    # most 25 wires.  Raising this guard only permits construction; it does not
+    # guarantee that GPU memory or runtime is sufficient.
     "max_simulator_physical_qubits": 40,
 }
 
@@ -71,6 +81,11 @@ EXECUTION_PROFILES = {
         "fake_backend_name": "FakeQuebec",
         "noise": "none",
         "report_tag": "GPU_FakeQuebec",
+
+        # The fake-device global/local simulations became prohibitively slow
+        # beyond 2 logical qubits, so the batch runner creates FakeQuebec jobs
+        # only for the 2q experiment points.
+        "allowed_num_qubits": [2],
     },
     "aer_constant_depolarizing": {
         "backend": "aer_simulator",
@@ -80,11 +95,15 @@ EXECUTION_PROFILES = {
     "aer_increasing_pauli": {
         "backend": "aer_simulator",
         "noise": "increasing_random_pauli",
+        # The capped-noise formula is stored inside each JSON report.
+        # The filename keeps the compact historical noise label.
         "report_tag": "GPU_increasing_pauli",
     },
     "aer_increasing_pauli_amplitude_damping": {
         "backend": "aer_simulator",
         "noise": "increasing_random_pauli_amplitude_damping",
+        # Same capped scale: 3x at D=100 and 4x from D=150 onward.
+        # Detailed scale values remain in the JSON report metadata.
         "report_tag": "GPU_increasing_pauli_amplitude_damping",
     },
 }
@@ -120,15 +139,18 @@ EXPERIMENTS = [
         "name": "hea_crz_complete_repeats",
         "unitary": "hea_crz",
         "depths_by_num_qubits": {
-            2: [36, 72, 108, 144],
+            # One 2q HEA-CRZ repeat consumes 6 physical-depth slots, and
+            # 30 is also a complete boundary (5 repeats).  Use the same
+            # 30-step sweep as the other circuit families.
+            2: [30, 60, 90, 120],
             3: [30, 60, 90, 120],
             4: [30, 60, 90, 120],
             5: [30, 60, 90, 120],
         },
     },
 
-    # random_type keeps the original fixed prefix and extends only the tail
-    # with deterministic seeded parameters. It is defined for 1-4 qubits only.
+    # random_type preserves the existing 1-4q behavior.  The new 5q circuit
+    # uses the requested deterministic 8-depth RX/RY/CX/CX/RY/RZ/CX/CX repeat.
     {
         "name": "random_type_complete_repeats",
         "unitary": "random_type",
@@ -141,6 +163,8 @@ EXPERIMENTS = [
             3: [27, 54, 81, 108],
             # 4q regularized X-Y-X-Z/CX schedule: period 8.
             4: [32, 64, 96, 128],
+            # 5q requested RX/RY/CX/CX/RY/RZ/CX/CX schedule: period 8.
+            5: [32, 64, 96, 128],
         },
     },
 ]
