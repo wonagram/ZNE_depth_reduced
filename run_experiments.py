@@ -55,6 +55,8 @@ class Job:
     gate_weight_2q: float
     max_simulator_physical_qubits: int
     depth_round: int
+    batch_phase: int
+    phase_label: str
 
     @property
     def report_filename(self) -> str:
@@ -242,6 +244,11 @@ def _build_jobs(
                             "max_simulator_physical_qubits", 24
                         )),
                         "depth_round": int(depth_round),
+                        "batch_phase": int(profile.get("batch_phase", 0)),
+                        "phase_label": str(profile.get(
+                            "phase_label",
+                            f"Batch phase {int(profile.get('batch_phase', 0))}",
+                        )),
                         "_sort_key": (
                             int(profile.get("batch_phase", 0)),
                             int(depth_round),
@@ -274,7 +281,85 @@ def _build_jobs(
     return [Job(index=i + 1, total=total, **raw) for i, raw in enumerate(raw_jobs)]
 
 
+
+def _stage_key(job: Job) -> tuple[int, int]:
+    """Return the strict batch-stage key: phase first, then depth round."""
+    return int(job.batch_phase), int(job.depth_round)
+
+
+def _group_jobs_by_stage(jobs: list[Job]) -> list[tuple[tuple[int, int], list[Job]]]:
+    """Group already-sorted jobs without changing their execution order."""
+    groups: list[tuple[tuple[int, int], list[Job]]] = []
+    for job in jobs:
+        key = _stage_key(job)
+        if not groups or groups[-1][0] != key:
+            groups.append((key, [job]))
+        else:
+            groups[-1][1].append(job)
+    return groups
+
+
+def _validate_strict_batch_order(jobs: list[Job]) -> None:
+    """Reject any plan that can return to an earlier depth round or phase.
+
+    The required sequence is:
+      phase -1: small FakeQuebec smoke test;
+      phase  0: all normal-Aer jobs, globally depth-major;
+      phase  1: all full FakeQuebec jobs, globally depth-major.
+    """
+    previous: tuple[int, int] | None = None
+    for job in jobs:
+        current = _stage_key(job)
+        if previous is not None and current < previous:
+            raise ValueError(
+                "Batch ordering regression detected: "
+                f"job {job.index} has phase/round {current} after {previous}. "
+                "A later depth round must never be followed by an earlier one."
+            )
+        previous = current
+
+        if job.batch_phase == -1:
+            if job.profile_name != "fake_quebec_statevector_smoke":
+                raise ValueError("Only the dedicated smoke profile may use batch_phase=-1.")
+        elif job.batch_phase == 0:
+            if job.backend in {"fake_backend", "fake_statevector"}:
+                raise ValueError(
+                    "The normal-Aer phase must exclude FakeQuebec completely."
+                )
+        elif job.batch_phase == 1:
+            if job.profile_name != "fake_quebec_statevector":
+                raise ValueError(
+                    "The final phase must contain only full FakeQuebec jobs."
+                )
+        else:
+            raise ValueError(f"Unsupported batch_phase={job.batch_phase}.")
+
+
+def _stage_banner(stage_jobs: list[Job]) -> str:
+    """Human-readable phase/round banner for dry runs and actual execution."""
+    first = stage_jobs[0]
+    depths = sorted({job.depth for job in stage_jobs})
+    profiles = sorted({job.profile_name for job in stage_jobs})
+    depth_text = ", ".join(str(value) for value in depths)
+    profile_text = ", ".join(profiles)
+
+    if first.batch_phase == -1:
+        round_text = "smoke test"
+    else:
+        round_text = f"depth round {first.depth_round + 1}"
+
+    return (
+        "\n" + "#" * 96 + "\n"
+        f"# {first.phase_label} | {round_text}\n"
+        f"# configured depths in this round: [{depth_text}]\n"
+        f"# profiles: {profile_text}\n"
+        f"# jobs in this section: {len(stage_jobs)}\n"
+        + "#" * 96
+    )
+
+
 def _validate_jobs(jobs: list[Job], u_config) -> list[str]:
+    _validate_strict_batch_order(jobs)
     warnings: list[str] = []
     seen: set[tuple[Any, ...]] = set()
     for job in jobs:
@@ -591,7 +676,10 @@ def _progress_counts(successes: int, failures: int, skipped: int) -> str:
 
 
 def _print_dry_job(job: Job) -> None:
-    print(f"[{job.index:04d}/{job.total:04d}] PLAN    | {_job_description(job)}")
+    print(
+        f"[{job.index:04d}/{job.total:04d}] PLAN    | "
+        f"round={job.depth_round + 1} | {_job_description(job)}"
+    )
 
 
 def _parse_args() -> argparse.Namespace:
@@ -691,6 +779,10 @@ def main() -> int:
         "Job timeout     : "
         + ("disabled" if timeout_seconds is None else _format_duration(timeout_seconds))
     )
+    print(
+        "Order guarantee : smoke -> ALL normal-Aer round 1 -> round 2 -> "
+        "round 3 -> round 4/5 -> ALL FakeQuebec rounds"
+    )
     print("=" * 88)
 
     for warning in dict.fromkeys(warnings):
@@ -699,10 +791,12 @@ def main() -> int:
         print()
 
     if dry_run:
-        for job in jobs:
-            _print_dry_job(job)
-            if args.show_commands:
-                print("    command:", " ".join(_command(job)))
+        for _, stage_jobs in _group_jobs_by_stage(jobs):
+            print(_stage_banner(stage_jobs))
+            for job in stage_jobs:
+                _print_dry_job(job)
+                if args.show_commands:
+                    print("    command:", " ".join(_command(job)))
         print("\nNo simulations were executed because dry-run mode is enabled.")
         if not args.show_commands:
             print("Use --show-commands only when you need to inspect full commands.")
@@ -729,8 +823,16 @@ def main() -> int:
     failures = 0
     skipped = 0
     batch_start = time.monotonic()
+    stage_groups = _group_jobs_by_stage(jobs)
+    stage_jobs_by_key = {key: members for key, members in stage_groups}
+    previous_stage: tuple[int, int] | None = None
 
     for job in jobs:
+        current_stage = _stage_key(job)
+        if current_stage != previous_stage:
+            print(_stage_banner(stage_jobs_by_key[current_stage]), flush=True)
+            previous_stage = current_stage
+
         job.report_directory.mkdir(parents=True, exist_ok=True)
         batch_elapsed = time.monotonic() - batch_start
 

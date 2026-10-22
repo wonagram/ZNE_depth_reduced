@@ -26,20 +26,39 @@ def main():
         assert math.isclose(cap[k],v,rel_tol=0,abs_tol=1e-15)
         assert math.isclose(depth_noise_parameters(10000)[k],v,rel_tol=0,abs_tol=1e-15)
     assert len(jobs)==819, len(jobs)
+    runner._validate_strict_batch_order(jobs)
     smoke=[j for j in jobs if j.profile_name=="fake_quebec_statevector_smoke"]
     assert len(smoke)==3
     assert [j.method for j in smoke]==["circuit_folding","global","local"]
-    assert all(j.index<=3 for j in smoke)
+    assert [j.index for j in smoke]==[1,2,3]
+
     fake=[j for j in jobs if j.profile_name=="fake_quebec_statevector"]
     assert sorted({j.num_qubits for j in fake})==[2,3,4,5]
-    assert all(j.backend=="fake_statevector" for j in fake)
+    assert all(j.backend=="fake_statevector" and j.batch_phase==1 for j in fake)
     first_fake=min(j.index for j in fake)-1
-    assert all(j.profile_name!="fake_quebec_statevector" for j in jobs[:first_fake])
-    assert all(j.profile_name=="fake_quebec_statevector" for j in jobs[first_fake:])
-    normal=jobs[3:first_fake]
-    for phase in (normal,jobs[first_fake:]):
-        rounds=[j.depth_round for j in phase]
-        assert rounds==sorted(rounds)
+    assert all(j.batch_phase in {-1,0} for j in jobs[:first_fake])
+    assert all(j.batch_phase==1 for j in jobs[first_fake:])
+
+    normal=[j for j in jobs if j.batch_phase==0]
+    assert normal
+    assert all(j.backend=="aer_simulator" for j in normal)
+    normal_rounds=[j.depth_round for j in normal]
+    assert normal_rounds==sorted(normal_rounds)
+    fake_rounds=[j.depth_round for j in fake]
+    assert fake_rounds==sorted(fake_rounds)
+
+    # Every normal round is globally complete before the next round begins.
+    normal_groups=runner._group_jobs_by_stage(normal)
+    assert [key for key,_ in normal_groups]==[(0,r) for r in range(5)]
+    expected_normal_profiles={
+        "aer_constant_depolarizing",
+        "aer_increasing_pauli",
+        "aer_increasing_pauli_amplitude_damping",
+    }
+    for (phase, round_index), members in normal_groups:
+        assert phase==0
+        assert {j.profile_name for j in members}==expected_normal_profiles
+        assert all(j.depth_round==round_index for j in members)
     for j in jobs:
         expected_fold=(1,3,5) if j.num_qubits==5 else (1,3,5,7)
         assert j.fold_factors==expected_fold,(j.index,j.fold_factors)
@@ -49,15 +68,15 @@ def main():
     assert len(r.operations)==14
     assert r.operations[-4:]==[("cx",0,1),("cx",1,2),("cx",2,3),("cx",3,4)]
     print("PASS: 819 unique jobs (3 smoke + 621 normal + 195 final fake)")
-    print("PASS: 3-job fake smoke test is first; normal profiles are depth-major; full fake phase is last")
+    print("PASS: strict order = smoke, complete normal-Aer round 1/2/3/4/5, then complete FakeQuebec rounds")
     print("PASS: FakeQuebec statevector covers every 2-5q point")
     print("PASS: 5q preparation = 5 RY + 5 RZ + 4-CX chain")
     print("Jobs by profile:",dict(Counter(j.profile_name for j in jobs)))
     print("Jobs by qubit:",dict(sorted(Counter(j.num_qubits for j in jobs).items())))
     print("First 12 jobs:")
-    for j in jobs[:12]: print(j.index,j.depth_round,j.profile_name,j.method,j.num_qubits,j.unitary,j.depth)
+    for j in jobs[:12]: print(j.index,j.batch_phase,j.depth_round,j.profile_name,j.method,j.num_qubits,j.unitary,j.depth)
     print("First 6 fake jobs:")
-    for j in fake[:6]: print(j.index,j.depth_round,j.method,j.num_qubits,j.unitary,j.depth)
+    for j in fake[:6]: print(j.index,j.batch_phase,j.depth_round,j.method,j.num_qubits,j.unitary,j.depth)
     if warnings:
         print("Warnings:")
         for w in dict.fromkeys(warnings): print(" -",w)

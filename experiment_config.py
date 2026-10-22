@@ -31,7 +31,7 @@ STOP_ON_FAILURE = False
 # Prevent one unexpectedly expensive simulation from blocking every later job.
 # A timed-out child process is terminated, recorded as FAILED/TIMEOUT, and the
 # batch continues. Set to 0 or None to disable the timeout.
-JOB_TIMEOUT_SECONDS = 5 * 60 * 60  # 5 hours per job
+JOB_TIMEOUT_SECONDS = 4 * 60 * 60  # 4 hours per job
 
 # Select the visible NVIDIA GPU(s). "0" means the first GPU.
 CUDA_VISIBLE_DEVICES = "0"
@@ -97,6 +97,7 @@ EXECUTION_PROFILES = {
         "report_tag": "GPU_FakeQuebec_statevector",
         "allowed_num_qubits": [2],
         "batch_phase": -1,
+        "phase_label": "PHASE A - FakeQuebec smoke test",
         "order_priority": 0,
     },
 
@@ -106,6 +107,7 @@ EXECUTION_PROFILES = {
         "noise": "constant_depolarizing",
         "report_tag": "GPU_constant_depolarizing",
         "batch_phase": 0,
+        "phase_label": "PHASE B - Normal Aer depth-major experiments",
         "order_priority": 0,
     },
     "aer_increasing_pauli": {
@@ -113,6 +115,7 @@ EXECUTION_PROFILES = {
         "noise": "increasing_random_pauli",
         "report_tag": "GPU_increasing_pauli",
         "batch_phase": 0,
+        "phase_label": "PHASE B - Normal Aer depth-major experiments",
         "order_priority": 1,
     },
     "aer_increasing_pauli_amplitude_damping": {
@@ -120,6 +123,7 @@ EXECUTION_PROFILES = {
         "noise": "increasing_random_pauli_amplitude_damping",
         "report_tag": "GPU_increasing_pauli_amplitude_damping",
         "batch_phase": 0,
+        "phase_label": "PHASE B - Normal Aer depth-major experiments",
         "order_priority": 2,
     },
 
@@ -133,6 +137,7 @@ EXECUTION_PROFILES = {
         "report_tag": "GPU_FakeQuebec_statevector",
         "allowed_num_qubits": [2, 3, 4, 5],
         "batch_phase": 1,
+        "phase_label": "PHASE C - Full FakeQuebec after all normal Aer jobs",
         "order_priority": 0,
     },
 }
@@ -143,9 +148,15 @@ EXECUTION_PROFILES = {
 # Each group may use depths_by_num_qubits when different qubit counts require
 # different complete-repeat boundaries. Add as many groups as needed.
 #
-# Jobs are depth-major rather than qubit-major: every first-depth point across
-# qubits/circuits is attempted before the second depth round. random_type joins
-# by ordinal round even though its numerical depths differ.
+# STRICT ORDER CONTRACT:
+#   A) Run the three-job FakeQuebec smoke test first.
+#   B) Excluding FakeQuebec, complete EVERY backend/circuit/qubit/method job in
+#      depth round 1 before ANY job in depth round 2; then round 3, round 4, etc.
+#      Thus a normal-Aer round-1 depth (roughly 24/27/30/32) never appears after
+#      a normal-Aer round-2/3/4 job has started.
+#   C) Only after all normal Aer depth rounds finish, run the complete
+#      FakeQuebec statevector-trajectory phase, also in depth-major order.
+# random_type joins each round by ordinal position because its depths differ.
 # ============================================================
 EXPERIMENTS = [
     # This tests circuit folding, global, and local dynamic execution with the
