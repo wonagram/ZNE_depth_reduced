@@ -22,6 +22,7 @@ from unitary_tools import (
     append_unitary_block,
     configure_aer_simulator_device,
     make_fake_aer_backend,
+    make_fake_statevector_aer_backend,
 )
 from state_preparation import *
 
@@ -57,13 +58,19 @@ REAL_HARDWARE_DEVICE_NAME = override(
 # Simulation backend
 # ============================================================
 # These flags apply only when USE_REAL_HARDWARE=False.
-# Select exactly one of the three simulation backends.
-USE_AER_SIMULATOR, USE_STATEVECTOR, USE_FAKE_BACKEND = resolve_backend_flags(
+# Select exactly one of the four simulation backends.
+(
+    USE_AER_SIMULATOR,
+    USE_STATEVECTOR,
+    USE_FAKE_BACKEND,
+    USE_FAKE_STATEVECTOR,
+) = resolve_backend_flags(
     _CLI_ARGS.backend,
     use_real_hardware=USE_REAL_HARDWARE,
     default_use_aer_simulator=True,
     default_use_statevector=False,
     default_use_fake_backend=False,
+    default_use_fake_statevector=False,
 )
 
 # Fake-backend mode uses an IBM fake-device snapshot to configure Aer.
@@ -83,6 +90,7 @@ _SIMULATION_BACKEND_FLAGS = {
     "USE_AER_SIMULATOR": USE_AER_SIMULATOR,
     "USE_STATEVECTOR": USE_STATEVECTOR,
     "USE_FAKE_BACKEND": USE_FAKE_BACKEND,
+    "USE_FAKE_STATEVECTOR": USE_FAKE_STATEVECTOR,
 }
 _ENABLED_SIMULATION_BACKENDS = [
     name for name, enabled in _SIMULATION_BACKEND_FLAGS.items() if enabled
@@ -97,7 +105,7 @@ if USE_REAL_HARDWARE:
     if _ENABLED_SIMULATION_BACKENDS:
         raise ValueError(
             "When USE_REAL_HARDWARE=True, turn off USE_AER_SIMULATOR, "
-            "USE_STATEVECTOR, and USE_FAKE_BACKEND. Enabled simulation backends: "
+            "USE_STATEVECTOR, USE_FAKE_BACKEND, and USE_FAKE_STATEVECTOR. Enabled simulation backends: "
             + ", ".join(_ENABLED_SIMULATION_BACKENDS)
         )
     SIMULATION_DEVICE = None
@@ -105,7 +113,7 @@ else:
     if len(_ENABLED_SIMULATION_BACKENDS) != 1:
         raise ValueError(
             "When USE_REAL_HARDWARE=False, select exactly one simulation backend: "
-            "USE_AER_SIMULATOR, USE_STATEVECTOR, or USE_FAKE_BACKEND. Enabled: "
+            "USE_AER_SIMULATOR, USE_STATEVECTOR, USE_FAKE_BACKEND, or USE_FAKE_STATEVECTOR. Enabled: "
             + (", ".join(_ENABLED_SIMULATION_BACKENDS)
                if _ENABLED_SIMULATION_BACKENDS else "none")
         )
@@ -142,13 +150,13 @@ GATE_WEIGHT_2Q = float(override(0.7, _CLI_ARGS.gate_weight_2q))
 #   qaoa, qaoa_xy, clifford_only
 # ============================================================
 UNITARY_TYPE = str(override("random_type", _CLI_ARGS.unitary))
-DEPTH = int(override(32, _CLI_ARGS.depth))
-NUM_U_QUBITS = int(override(3, _CLI_ARGS.num_qubits))
+DEPTH = int(override(18, _CLI_ARGS.depth))
+NUM_U_QUBITS = int(override(2, _CLI_ARGS.num_qubits))
 
 # ============================================================
 # Circuit drawing
 # ============================================================
-DRAW_CIRCUIT = True
+DRAW_CIRCUIT = False
 DRAW_DEPTH_FOLDED = 3
 
 # ============================================================
@@ -195,19 +203,45 @@ overrotation_epsilon = 0.02
 # Reproducible depth-dependent random-Pauli assignments and Aer sampling.
 BASE_SEED = int(override(150, _CLI_ARGS.base_seed))
 
-# p(D) = p0 * [1 + (NOISE_MULTIPLIER - 1) * D / REFERENCE_DEPTH].
-# The model is not capped beyond REFERENCE_DEPTH.  An explicit error is raised
-# if any probability becomes larger than 1.
-REFERENCE_DEPTH = 50
-NOISE_MULTIPLIER = 10.0
+# Capped depth-dependent noise model.
+#
+# For every original-gate noise location at structural depth D, use
+#
+#   scale(D) = min(
+#       1 + (NOISE_MULTIPLIER - 1) * D / REFERENCE_DEPTH,
+#       MAX_NOISE_MULTIPLIER,
+#   )
+#   parameter(D) = parameter_initial * scale(D).
+#
+# With the values below, scale(D) = min(1 + 2D/100, 4):
+#   D =   0 -> 1x,
+#   D = 100 -> 3x,
+#   D >=150 -> 4x cap.
+#
+# At the 4x cap, the four error parameters stop at:
+#   p_1q     = 0.000980000 = 0.0980000%
+#   p_2q     = 0.027880000 = 2.7880000%
+#   gamma_1q = 0.000448692 = 0.0448692%
+#   gamma_2q = 0.008452596 = 0.8452596%
+#
+# The cap is intentional: folded circuits may reach depths far beyond the
+# original U depth, but their per-location error probabilities must not keep
+# increasing without bound.
+REFERENCE_DEPTH = 100
+NOISE_MULTIPLIER = 3.0
+MAX_NOISE_MULTIPLIER = 4.0
+NOISE_CAP_DEPTH = (
+    REFERENCE_DEPTH
+    * (MAX_NOISE_MULTIPLIER - 1.0)
+    / (NOISE_MULTIPLIER - 1.0)
+)
 
 P1_INITIAL = 0.000245
 P2_INITIAL = 0.006970
 GAMMA1_INITIAL = 0.000112173
 GAMMA2_INITIAL = 0.002113149
 
-# Displayed slopes implied by the formula above.  Change the initial values,
-# REFERENCE_DEPTH, or NOISE_MULTIPLIER to change these slopes consistently.
+# Linear increments before the cap is reached.
 P1_INCREMENT_PER_DEPTH = (
     (NOISE_MULTIPLIER - 1.0) * P1_INITIAL / REFERENCE_DEPTH
 )
@@ -220,6 +254,12 @@ GAMMA1_INCREMENT_PER_DEPTH = (
 GAMMA2_INCREMENT_PER_DEPTH = (
     (NOISE_MULTIPLIER - 1.0) * GAMMA2_INITIAL / REFERENCE_DEPTH
 )
+
+# Explicit maximum values recorded here for readability and validation.
+P1_MAX = P1_INITIAL * MAX_NOISE_MULTIPLIER
+P2_MAX = P2_INITIAL * MAX_NOISE_MULTIPLIER
+GAMMA1_MAX = GAMMA1_INITIAL * MAX_NOISE_MULTIPLIER
+GAMMA2_MAX = GAMMA2_INITIAL * MAX_NOISE_MULTIPLIER
 
 _CONSTANT_NOISE_ACTIVE = any((
     USE_CONSTANT_DEPOLARIZING,
@@ -273,6 +313,7 @@ NOISE_CONTROLLER = NoiseController(
     base_seed=BASE_SEED,
     reference_depth=REFERENCE_DEPTH,
     noise_multiplier=NOISE_MULTIPLIER,
+    maximum_noise_multiplier=MAX_NOISE_MULTIPLIER,
     p1_initial=P1_INITIAL,
     p2_initial=P2_INITIAL,
     gamma1_initial=GAMMA1_INITIAL,
@@ -661,6 +702,8 @@ def _backend_mode_name():
         return f"real_hardware:{_real_hardware_backend_name()}"
     if USE_STATEVECTOR:
         return "statevector_noiseless"
+    if USE_FAKE_STATEVECTOR:
+        return f"fake_backend_statevector_trajectories:{FAKE_BACKEND_NAME}"
     if USE_FAKE_BACKEND:
         return f"fake_backend:{FAKE_BACKEND_NAME}"
     if _INCREASING_NOISE_ACTIVE:
@@ -675,6 +718,8 @@ def _backend_kind_for_report():
         return "real_hardware"
     if USE_STATEVECTOR:
         return "statevector"
+    if USE_FAKE_STATEVECTOR:
+        return "fake_statevector"
     if USE_FAKE_BACKEND:
         return "fake_backend"
     return "aer_simulator"
@@ -685,6 +730,8 @@ def _backend_name_for_report():
         return _real_hardware_backend_name()
     if USE_STATEVECTOR:
         return "AerSimulator(statevector)"
+    if USE_FAKE_STATEVECTOR:
+        return f"{FAKE_BACKEND_NAME}(statevector trajectories)"
     if USE_FAKE_BACKEND:
         return str(FAKE_BACKEND_NAME)
     return "AerSimulator"
@@ -696,7 +743,7 @@ def _machine_name_for_report():
 
 def _noise_filename_tag():
     """Compact noise label used to prevent report-file overwrites."""
-    if USE_FAKE_BACKEND:
+    if USE_FAKE_BACKEND or USE_FAKE_STATEVECTOR:
         return None
     if USE_STATEVECTOR:
         return None
@@ -732,6 +779,9 @@ def _execution_filename_tag():
     parts = [str(SIMULATION_DEVICE)]
     if USE_STATEVECTOR:
         parts.append("statevector")
+    elif USE_FAKE_STATEVECTOR:
+        parts.append(_safe_filename_tag(FAKE_BACKEND_NAME))
+        parts.append("statevector")
     elif USE_FAKE_BACKEND:
         parts.append(_safe_filename_tag(FAKE_BACKEND_NAME))
     else:
@@ -758,7 +808,9 @@ def _noise_report():
 
     active_custom_types = active_constant_types + active_increasing_types
 
-    if USE_FAKE_BACKEND:
+    if USE_FAKE_STATEVECTOR:
+        source = "fake_backend_device_snapshot_statevector_trajectories"
+    elif USE_FAKE_BACKEND:
         source = "fake_backend_device_snapshot"
     elif USE_REAL_HARDWARE:
         source = "real_hardware_device_noise"
@@ -799,7 +851,13 @@ def _noise_report():
         "depth_dependent_noise_configuration": (
             NOISE_CONTROLLER.runtime_report() if _INCREASING_NOISE_ACTIVE else None
         ),
-        "fake_backend_name": str(FAKE_BACKEND_NAME) if USE_FAKE_BACKEND else None,
+        "fake_backend_name": (
+            str(FAKE_BACKEND_NAME)
+            if (USE_FAKE_BACKEND or USE_FAKE_STATEVECTOR)
+            else None
+        ),
+        "fake_statevector_trajectory_sampling": bool(USE_FAKE_STATEVECTOR),
+        "shot_branching_enable": bool(USE_FAKE_STATEVECTOR),
     }
 
 
@@ -835,6 +893,13 @@ def _write_report(method_name, expectations, raw_counts, transpiled_counts,
             "filename_tag": _execution_filename_tag(),
             "noise_filename_tag": _noise_filename_tag(),
             "shots": None if USE_STATEVECTOR else int(shots),
+            "simulation_method": (
+                "statevector"
+                if (USE_STATEVECTOR or USE_FAKE_STATEVECTOR)
+                else "automatic"
+            ),
+            "noisy_statevector_trajectories": bool(USE_FAKE_STATEVECTOR),
+            "shot_branching_enable": bool(USE_FAKE_STATEVECTOR),
         },
         "noise": _noise_report(),
         "weights": {
@@ -896,6 +961,16 @@ elif USE_STATEVECTOR:
         max_parallel_shots=1,
     )
     configure_aer_simulator_device(backend, use_gpu=USE_GPU)
+
+elif USE_FAKE_STATEVECTOR:
+
+    FAKE_DEVICE, backend = make_fake_statevector_aer_backend(
+        FAKE_BACKEND_NAME,
+        seed_simulator=BASE_SEED,
+        required_qubits=NUM_U_QUBITS * max(depth_folded_circuits),
+        use_gpu=USE_GPU,
+        shot_branching_enable=True,
+    )
 
 elif USE_FAKE_BACKEND:
 
@@ -1248,6 +1323,15 @@ else:
 
     if USE_STATEVECTOR:
         print("Backend: AerSimulator (statevector, noiseless)")
+    elif USE_FAKE_STATEVECTOR:
+        print(
+            f"Backend: {FAKE_BACKEND_NAME} snapshot via AerSimulator "
+            "(forced statevector trajectories)"
+        )
+        print(
+            "Noise: fake-backend device snapshot; finite-shot noisy "
+            "statevector trajectories with shot branching"
+        )
     elif USE_FAKE_BACKEND:
         print(f"Backend: {FAKE_BACKEND_NAME} snapshot via AerSimulator")
         print("Noise: fake-backend device snapshot; custom noise channels disabled")

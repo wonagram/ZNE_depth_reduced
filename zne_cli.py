@@ -13,7 +13,12 @@ from typing import Optional, Sequence
 
 
 MACHINE_CHOICES = ("cpu", "gpu", "real_hardware")
-BACKEND_CHOICES = ("aer_simulator", "fake_backend", "statevector")
+BACKEND_CHOICES = (
+    "aer_simulator",
+    "fake_backend",
+    "fake_statevector",
+    "statevector",
+)
 NOISE_CHOICES = (
     "none",
     "constant_depolarizing",
@@ -70,7 +75,10 @@ def parse_cli_args(description: str) -> CliArguments:
         "--noise",
         type=_lower,
         choices=NOISE_CHOICES,
-        help="Custom Aer noise mode. Fake backend/statevector require 'none'.",
+        help=(
+            "Custom Aer noise mode. fake_backend, fake_statevector, and "
+            "ideal statevector require 'none'."
+        ),
     )
     parser.add_argument("--num-qubits", type=int)
     parser.add_argument("--unitary", type=str)
@@ -154,24 +162,34 @@ def resolve_backend_flags(
     default_use_aer_simulator: bool,
     default_use_statevector: bool,
     default_use_fake_backend: bool,
-) -> tuple[bool, bool, bool]:
+    default_use_fake_statevector: bool = False,
+) -> tuple[bool, bool, bool, bool]:
+    """Resolve four mutually exclusive local-simulation backends.
+
+    ``statevector`` remains the existing exact ideal/noiseless mode.
+    ``fake_statevector`` keeps the fake-device noise model, forces Aer
+    method="statevector", and returns finite-shot results from noisy pure-state
+    trajectories.  It is therefore not an ideal statevector calculation.
+    """
     if use_real_hardware:
         if selected is not None:
             raise ValueError(
                 "Do not supply --backend when --machine real_hardware is selected."
             )
-        return False, False, False
+        return False, False, False, False
 
     if selected is None:
         return (
             bool(default_use_aer_simulator),
             bool(default_use_statevector),
             bool(default_use_fake_backend),
+            bool(default_use_fake_statevector),
         )
     return (
         selected == "aer_simulator",
         selected == "statevector",
         selected == "fake_backend",
+        selected == "fake_statevector",
     )
 
 

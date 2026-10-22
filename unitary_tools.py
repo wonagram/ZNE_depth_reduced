@@ -1024,22 +1024,11 @@ def configure_aer_simulator_device(simulator, *, use_gpu: bool = False) -> str:
     return requested
 
 
-def make_fake_aer_backend(fake_backend_name: str, *, seed_simulator: int = 150,
-                           required_qubits: int | None = None,
-                           use_gpu: bool = False):
-    """Create a noisy Aer simulator from an IBM fake-backend snapshot.
-
-    The fake snapshot supplies coupling, basis gates, readout properties and
-    device noise.  Aer performs the execution so mid-circuit measurement and
-    if_test control flow can be simulated.  No custom NoiseController channels
-    should be appended when this backend mode is selected.  ``use_gpu`` only
-    changes the machine used by Aer; it does not change the fake-device noise
-    snapshot or circuit semantics.
-    """
+def _load_fake_backend_snapshot(fake_backend_name: str, required_qubits: int | None):
+    """Instantiate and validate a qiskit-ibm-runtime fake backend snapshot."""
     if not isinstance(fake_backend_name, str) or not fake_backend_name.strip():
         raise ValueError("FAKE_BACKEND_NAME must be a non-empty fake-backend class name.")
 
-    from qiskit_aer import AerSimulator
     from qiskit_ibm_runtime import fake_provider
 
     class_name = fake_backend_name.strip()
@@ -1047,7 +1036,8 @@ def make_fake_aer_backend(fake_backend_name: str, *, seed_simulator: int = 150,
     if backend_class is None:
         available = sorted(
             name for name in dir(fake_provider)
-            if name.startswith("Fake") and name not in {"FakeBackendV2", "FakeProviderForBackendV2"}
+            if name.startswith("Fake")
+            and name not in {"FakeBackendV2", "FakeProviderForBackendV2"}
         )
         raise ValueError(
             f"Unknown or unavailable FAKE_BACKEND_NAME={class_name!r}. "
@@ -1061,9 +1051,55 @@ def make_fake_aer_backend(fake_backend_name: str, *, seed_simulator: int = 150,
             f"{class_name} has {snapshot_backend.num_qubits} qubits, but this run "
             f"needs at least {int(required_qubits)} physical qubits."
         )
+    return snapshot_backend
+
+
+def make_fake_aer_backend(fake_backend_name: str, *, seed_simulator: int = 150,
+                           required_qubits: int | None = None,
+                           use_gpu: bool = False):
+    """Create the historical automatic-method noisy fake-backend simulator."""
+    from qiskit_aer import AerSimulator
+
+    snapshot_backend = _load_fake_backend_snapshot(fake_backend_name, required_qubits)
     simulator = AerSimulator.from_backend(snapshot_backend)
     configure_aer_simulator_device(simulator, use_gpu=use_gpu)
     simulator.set_options(seed_simulator=int(seed_simulator))
+    return snapshot_backend, simulator
+
+
+def make_fake_statevector_aer_backend(
+    fake_backend_name: str,
+    *,
+    seed_simulator: int = 150,
+    required_qubits: int | None = None,
+    use_gpu: bool = False,
+    shot_branching_enable: bool = True,
+):
+    """Create FakeQuebec-style noisy statevector trajectories with final shots.
+
+    This is distinct from the existing ideal ``statevector`` backend.  The fake
+    snapshot still supplies approximate gate, relaxation, readout, basis-gate,
+    and coupling information.  A noisy channel generally creates a mixed state,
+    so Aer samples a noisy pure-state trajectory for each shot and then samples
+    intermediate/final measurements.  The reported expectation is finite-shot.
+
+    Shot branching shares common state evolution between shots and branches only
+    when noise or dynamic measurements require it.  It may reduce runtime, but
+    it does not remove exponential statevector memory scaling with active wires.
+    """
+    from qiskit_aer import AerSimulator
+
+    snapshot_backend = _load_fake_backend_snapshot(fake_backend_name, required_qubits)
+    simulator = AerSimulator.from_backend(snapshot_backend, method="statevector")
+    configure_aer_simulator_device(simulator, use_gpu=use_gpu)
+    simulator.set_options(
+        method="statevector",
+        precision="double",
+        seed_simulator=int(seed_simulator),
+        max_parallel_experiments=1,
+        shot_branching_enable=bool(shot_branching_enable),
+        shot_branching_sampling_enable=False,
+    )
     return snapshot_backend, simulator
 
 # ============================================================
