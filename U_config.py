@@ -18,8 +18,8 @@ share a counted layer only when they act on disjoint qubits.
 The historical U_GATES dictionary and all original theta variables are kept
 verbatim.  The runtime random_type configuration preserves the exact historical
 1-3-qubit prefix, intentionally regularizes the 4-qubit pattern into an 8-depth
-repeat, and then extends each supported random_type circuit deterministically
-with seeded random angles.
+repeat, and adds a deterministic 5-qubit 8-depth repeat.  Every added rotation
+angle is generated reproducibly from the dedicated random_type extension seed.
 """
 
 from __future__ import annotations
@@ -244,12 +244,14 @@ MAX_SUPPORTED_QUBITS = 5
 
 # random_type keeps the old fixed prefix and extends only the new tail.
 # 3q uses 126 rather than 120 so the final 9-depth repeat is not cut.
+# 5q is a new deterministic 8-depth repeat and therefore ends exactly at 128.
 RANDOM_TYPE_EXTENSION_SEED = 150
 RANDOM_TYPE_TARGET_DEPTHS = {
     1: 120,
     2: 120,
     3: 126,
     4: 128,
+    5: 128,
 }
 
 _LOGICAL_GATE_DEPTHS = {
@@ -273,8 +275,8 @@ UNITARY_METADATA = {
     "random_type": {
         "minimum_qubits": 1,
         "description": (
-            "Historical fixed prefix extended deterministically with seeded random "
-            "angles; 4q uses an 8-depth X-Y-X-Z/CNOT repeat."
+            "Historical 1-3q prefixes are preserved; 4q and 5q use deterministic "
+            "8-depth repeats with seeded random rotation angles."
         ),
     },
     "hea_cz": {
@@ -504,20 +506,55 @@ def _random_type_extra_layer(n: int, layer_index: int,
             return [("z", q, angle) for q in range(4)]
         return [("cx", 2, 1)]
 
-    raise ValueError(
-        "UNITARY_TYPE='random_type' supports only 1-4 qubits. "
-        "No historical 5-qubit random_type pattern exists."
-    )
+    if n == 5:
+        # New exact 8-depth repeat requested for the 5q experiments:
+        #   1. RX on q0-q4
+        #   2. RY on q0-q4
+        #   3. CX(0,1) || CX(2,3)
+        #   4. CX(1,2) || CX(3,4)
+        #   5. RY on q0-q4
+        #   6. RZ on q0-q4
+        #   7. CX(0,2) || CX(1,3)
+        #   8. CX(0,3) || CX(1,4)
+        #
+        # Each rotation layer receives a fresh but reproducible seeded-random
+        # angle.  The two CX gates inside each CX layer are disjoint and share
+        # one physical-depth slot.
+        position = layer_index % 8
+        if position == 0:
+            angle = _wide_angle(rng)
+            return [("x", q, angle) for q in range(5)]
+        if position == 1:
+            angle = _wide_angle(rng)
+            return [("y", q, angle) for q in range(5)]
+        if position == 2:
+            return [("cx", 0, 1), ("cx", 2, 3)]
+        if position == 3:
+            return [("cx", 1, 2), ("cx", 3, 4)]
+        if position == 4:
+            angle = _wide_angle(rng)
+            return [("y", q, angle) for q in range(5)]
+        if position == 5:
+            angle = _wide_angle(rng)
+            return [("z", q, angle) for q in range(5)]
+        if position == 6:
+            return [("cx", 0, 2), ("cx", 1, 3)]
+        return [("cx", 0, 3), ("cx", 1, 4)]
+
+    raise ValueError("UNITARY_TYPE='random_type' supports only 1-5 qubits.")
 
 
 def _legacy_random_components(n: int) -> tuple[ComponentSpec, ...]:
-    if n not in RANDOM_TYPE_U_GATES:
-        raise ValueError(
-            "UNITARY_TYPE='random_type' supports only 1-4 qubits. "
-            "The original U_config.py did not define a 5-qubit random_type."
-        )
+    if n in RANDOM_TYPE_U_GATES:
+        # Preserve the existing 1-4q runtime prefixes exactly.
+        layers = copy.deepcopy(RANDOM_TYPE_U_GATES[n])
+    elif n == 5:
+        # There is no historical 5q prefix.  Build the new requested repeat
+        # from depth 1 without modifying any prior 1-4q experiment.
+        layers = []
+    else:
+        raise ValueError("UNITARY_TYPE='random_type' supports only 1-5 qubits.")
 
-    layers = copy.deepcopy(RANDOM_TYPE_U_GATES[n])
     target_depth = int(RANDOM_TYPE_TARGET_DEPTHS[n])
     rng = _random_type_extension_rng(n)
 
@@ -862,3 +899,5 @@ if any(RANDOM_TYPE_U_GATES[n][:len(U_GATES[n])] != U_GATES[n]
     raise AssertionError("The historical 1-3q random_type prefixes were changed.")
 if len(RANDOM_TYPE_U_GATES[4]) != 16:
     raise AssertionError("The fixed 4q random_type prefix must remain 16 layers.")
+if RANDOM_TYPE_TARGET_DEPTHS.get(5) != 128:
+    raise AssertionError("The 5q random_type target depth must be 128.")

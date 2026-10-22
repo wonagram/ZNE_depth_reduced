@@ -420,37 +420,55 @@ _DEPTH_IGNORED_OPERATION_NAMES = {
 }
 
 
-def depth_noise_scale(depth: float, *, reference_depth: float = 50.0,
-                      noise_multiplier: float = 10.0) -> float:
-    """Linear scale used by the depth-dependent noise model.
+def depth_noise_scale(depth: float, *, reference_depth: float = 100.0,
+                      noise_multiplier: float = 3.0,
+                      maximum_noise_multiplier: float = 4.0) -> float:
+    """Capped linear scale used by the depth-dependent noise model.
 
-    The scale is 1 at depth 0 and ``noise_multiplier`` at
-    ``reference_depth``.  It intentionally continues linearly beyond the
-    reference depth and is never silently capped.
+    The scale is
+
+        s(D) = min(
+            1 + (noise_multiplier - 1) * D / reference_depth,
+            maximum_noise_multiplier,
+        ).
+
+    With the project defaults, s(0)=1, s(100)=3, and s(D)=4 for D>=150.
+    The cap prevents folded circuits from producing unphysical probabilities
+    while preserving a monotone increase over the experimentally used depths.
     """
     depth = float(depth)
     reference_depth = float(reference_depth)
     noise_multiplier = float(noise_multiplier)
+    maximum_noise_multiplier = float(maximum_noise_multiplier)
     if not np.isfinite(depth) or depth < 0.0:
         raise ValueError(f"Noise depth must be finite and nonnegative, got {depth}.")
     if not np.isfinite(reference_depth) or reference_depth <= 0.0:
         raise ValueError("REFERENCE_DEPTH must be positive and finite.")
-    if not np.isfinite(noise_multiplier) or noise_multiplier <= 0.0:
-        raise ValueError("NOISE_MULTIPLIER must be positive and finite.")
-    return 1.0 + (noise_multiplier - 1.0) * depth / reference_depth
+    if not np.isfinite(noise_multiplier) or noise_multiplier < 1.0:
+        raise ValueError("NOISE_MULTIPLIER must be finite and at least 1.")
+    if (not np.isfinite(maximum_noise_multiplier)
+            or maximum_noise_multiplier < noise_multiplier):
+        raise ValueError(
+            "MAX_NOISE_MULTIPLIER must be finite and no smaller than "
+            "NOISE_MULTIPLIER."
+        )
+    uncapped = 1.0 + (noise_multiplier - 1.0) * depth / reference_depth
+    return min(uncapped, maximum_noise_multiplier)
 
 
-def depth_noise_parameters(depth: float, *, reference_depth: float = 50.0,
-                           noise_multiplier: float = 10.0,
+def depth_noise_parameters(depth: float, *, reference_depth: float = 100.0,
+                           noise_multiplier: float = 3.0,
+                           maximum_noise_multiplier: float = 4.0,
                            p1_initial: float = 0.000245,
                            p2_initial: float = 0.006970,
                            gamma1_initial: float = 0.000112173,
                            gamma2_initial: float = 0.002113149) -> dict[str, float]:
-    """Return the four linearly increasing noise parameters at ``depth``."""
+    """Return the four capped, depth-dependent noise parameters."""
     scale = depth_noise_scale(
         depth,
         reference_depth=reference_depth,
         noise_multiplier=noise_multiplier,
+        maximum_noise_multiplier=maximum_noise_multiplier,
     )
     parameters = {
         "p_1q": float(p1_initial) * scale,
@@ -572,8 +590,9 @@ class NoiseController:
                  use_increasing_random_pauli: bool = False,
                  use_increasing_amplitude_damping: bool = False,
                  base_seed: int = 150,
-                 reference_depth: float = 50.0,
-                 noise_multiplier: float = 10.0,
+                 reference_depth: float = 100.0,
+                 noise_multiplier: float = 3.0,
+                 maximum_noise_multiplier: float = 4.0,
                  p1_initial: float = 0.000245,
                  p2_initial: float = 0.006970,
                  gamma1_initial: float = 0.000112173,
@@ -599,6 +618,7 @@ class NoiseController:
         self.base_seed = int(base_seed)
         self.reference_depth = float(reference_depth)
         self.noise_multiplier = float(noise_multiplier)
+        self.maximum_noise_multiplier = float(maximum_noise_multiplier)
         self.p1_initial = float(p1_initial)
         self.p2_initial = float(p2_initial)
         self.gamma1_initial = float(gamma1_initial)
@@ -627,6 +647,7 @@ class NoiseController:
                 0.0,
                 reference_depth=self.reference_depth,
                 noise_multiplier=self.noise_multiplier,
+                maximum_noise_multiplier=self.maximum_noise_multiplier,
                 p1_initial=self.p1_initial,
                 p2_initial=self.p2_initial,
                 gamma1_initial=self.gamma1_initial,
@@ -636,6 +657,7 @@ class NoiseController:
                 self.reference_depth,
                 reference_depth=self.reference_depth,
                 noise_multiplier=self.noise_multiplier,
+                maximum_noise_multiplier=self.maximum_noise_multiplier,
                 p1_initial=self.p1_initial,
                 p2_initial=self.p2_initial,
                 gamma1_initial=self.gamma1_initial,
@@ -647,6 +669,29 @@ class NoiseController:
                 "gamma_1q": self.gamma1_initial,
                 "gamma_2q": self.gamma2_initial,
             }
+            if self.noise_multiplier == 1.0:
+                cap_depth = (
+                    0.0 if self.maximum_noise_multiplier == 1.0 else None
+                )
+            else:
+                cap_depth = (
+                    self.reference_depth
+                    * (self.maximum_noise_multiplier - 1.0)
+                    / (self.noise_multiplier - 1.0)
+                )
+            at_cap = (
+                None if cap_depth is None
+                else depth_noise_parameters(
+                    cap_depth,
+                    reference_depth=self.reference_depth,
+                    noise_multiplier=self.noise_multiplier,
+                    maximum_noise_multiplier=self.maximum_noise_multiplier,
+                    p1_initial=self.p1_initial,
+                    p2_initial=self.p2_initial,
+                    gamma1_initial=self.gamma1_initial,
+                    gamma2_initial=self.gamma2_initial,
+                )
+            )
             for name, initial in expected_initials.items():
                 if not math.isclose(
                     at_zero[name], initial, rel_tol=0.0, abs_tol=1e-15
@@ -663,6 +708,16 @@ class NoiseController:
                         f"{name} does not equal NOISE_MULTIPLIER times its initial "
                         "value at REFERENCE_DEPTH."
                     )
+                if at_cap is not None:
+                    expected_cap = initial * self.maximum_noise_multiplier
+                    if not math.isclose(
+                        at_cap[name], expected_cap,
+                        rel_tol=1e-12, abs_tol=1e-15,
+                    ):
+                        raise AssertionError(
+                            f"{name} does not equal MAX_NOISE_MULTIPLIER times its "
+                            "initial value at the cap depth."
+                        )
 
         self.depolarizing_1q = (
             _mark_artificial_noise_instruction(
@@ -712,6 +767,7 @@ class NoiseController:
             depth,
             reference_depth=self.reference_depth,
             noise_multiplier=self.noise_multiplier,
+            maximum_noise_multiplier=self.maximum_noise_multiplier,
             p1_initial=self.p1_initial,
             p2_initial=self.p2_initial,
             gamma1_initial=self.gamma1_initial,
@@ -856,8 +912,19 @@ class NoiseController:
                 "increasing depth."
             ),
             "base_seed": self.base_seed,
+            "scaling_formula": (
+                "s(D)=min(1+(noise_multiplier-1)*D/reference_depth, "
+                "maximum_noise_multiplier); parameter(D)=parameter(0)*s(D)"
+            ),
             "reference_depth": self.reference_depth,
             "noise_multiplier": self.noise_multiplier,
+            "maximum_noise_multiplier": self.maximum_noise_multiplier,
+            "cap_depth": (
+                None if self.noise_multiplier == 1.0
+                else self.reference_depth
+                * (self.maximum_noise_multiplier - 1.0)
+                / (self.noise_multiplier - 1.0)
+            ),
             "initial_parameters": {
                 "p_1q": self.p1_initial,
                 "p_2q": self.p2_initial,
@@ -886,6 +953,7 @@ class NoiseController:
                 0.0,
                 reference_depth=self.reference_depth,
                 noise_multiplier=self.noise_multiplier,
+                maximum_noise_multiplier=self.maximum_noise_multiplier,
                 p1_initial=self.p1_initial,
                 p2_initial=self.p2_initial,
                 gamma1_initial=self.gamma1_initial,
@@ -895,11 +963,18 @@ class NoiseController:
                 self.reference_depth,
                 reference_depth=self.reference_depth,
                 noise_multiplier=self.noise_multiplier,
+                maximum_noise_multiplier=self.maximum_noise_multiplier,
                 p1_initial=self.p1_initial,
                 p2_initial=self.p2_initial,
                 gamma1_initial=self.gamma1_initial,
                 gamma2_initial=self.gamma2_initial,
             ),
+            "maximum_parameters": {
+                "p_1q": self.p1_initial * self.maximum_noise_multiplier,
+                "p_2q": self.p2_initial * self.maximum_noise_multiplier,
+                "gamma_1q": self.gamma1_initial * self.maximum_noise_multiplier,
+                "gamma_2q": self.gamma2_initial * self.maximum_noise_multiplier,
+            },
             "runtime": dict(self._runtime),
         }
 
