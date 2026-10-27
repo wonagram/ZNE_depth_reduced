@@ -22,6 +22,7 @@ BACKEND_CHOICES = (
 NOISE_CHOICES = (
     "none",
     "constant_depolarizing",
+    "small_constant_depolarizing",
     "constant_amplitude_damping",
     "constant_phase_damping",
     "constant_coherent_overrotation",
@@ -212,7 +213,7 @@ def resolve_noise_flags(
         "increasing_random_pauli": False,
         "increasing_amplitude_damping": False,
     }
-    if selected == "constant_depolarizing":
+    if selected in {"constant_depolarizing", "small_constant_depolarizing"}:
         flags["constant_depolarizing"] = True
     elif selected == "constant_amplitude_damping":
         flags["constant_amplitude_damping"] = True

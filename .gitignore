@@ -1,1 +1,5 @@
 .idea/
+# Local previous results
+zne_reports_previous/
+zne_plots_previous/
+.DS_Store

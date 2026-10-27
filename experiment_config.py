@@ -31,7 +31,7 @@ STOP_ON_FAILURE = False
 # Prevent one unexpectedly expensive simulation from blocking every later job.
 # A timed-out child process is terminated, recorded as FAILED/TIMEOUT, and the
 # batch continues. Set to 0 or None to disable the timeout.
-JOB_TIMEOUT_SECONDS = 12 * 60 * 60  # 4 hours per job
+JOB_TIMEOUT_SECONDS = 12 * 60 * 60  # 12 hours per job
 
 # Select the visible NVIDIA GPU(s). "0" means the first GPU.
 CUDA_VISIBLE_DEVICES = "0"
@@ -54,10 +54,8 @@ METHOD_FILES = {
 COMMON = {
     "machine": "gpu",
     "methods": "all",
-    # The dedicated FakeQuebec smoke profile is excluded here and is used only
-    # by the small first experiment below.
     "profiles": [
-        "aer_constant_depolarizing",
+        "aer_small_constant_depolarizing",
         "aer_increasing_pauli",
         "aer_increasing_pauli_amplitude_damping",
         "fake_quebec_statevector",
@@ -88,24 +86,12 @@ COMMON = {
 # Four requested backend/noise profiles
 # ============================================================
 EXECUTION_PROFILES = {
-    # Phase -1: a small three-method smoke test runs before everything else so
-    # a backend/API incompatibility is discovered before the overnight batch.
-    "fake_quebec_statevector_smoke": {
-        "backend": "fake_statevector",
-        "fake_backend_name": "FakeQuebec",
-        "noise": "none",
-        "report_tag": "GPU_FakeQuebec_statevector",
-        "allowed_num_qubits": [2],
-        "batch_phase": -1,
-        "phase_label": "PHASE A - FakeQuebec smoke test",
-        "order_priority": 0,
-    },
 
     # Phase 0: custom-Aer profiles run first in depth-round order.
-    "aer_constant_depolarizing": {
+    "aer_small_constant_depolarizing": {
         "backend": "aer_simulator",
-        "noise": "constant_depolarizing",
-        "report_tag": "GPU_constant_depolarizing",
+        "noise": "small_constant_depolarizing",
+        "report_tag": "GPU_small_constant_depolarizing_0p2pct",
         "batch_phase": 0,
         "phase_label": "PHASE B - Normal Aer depth-major experiments",
         "order_priority": 0,
@@ -149,16 +135,16 @@ EXECUTION_PROFILES = {
 # different complete-repeat boundaries. Add as many groups as needed.
 #
 # STRICT ORDER CONTRACT:
-#   A) Run the three-job FakeQuebec smoke test first.
-#   B) Excluding FakeQuebec, complete EVERY backend/circuit/qubit/method job in
+#   A) Complete EVERY normal-Aer backend/circuit/qubit/method job in
 #      depth round 1 before ANY job in depth round 2; then round 3, round 4, etc.
 #      Thus a normal-Aer round-1 depth (roughly 24/27/30/32) never appears after
 #      a normal-Aer round-2/3/4 job has started.
-#   C) Only after all normal Aer depth rounds finish, run the complete
+#   B) Only after all normal Aer depth rounds finish, run the complete
 #      FakeQuebec statevector-trajectory phase, also in depth-major order.
 # random_type joins each round by ordinal position because its depths differ.
 # ============================================================
 EXPERIMENTS = [
+
     {
         "name": "hea_cz_complete_repeats",
         "unitary": "hea_cz",
