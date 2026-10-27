@@ -1,0 +1,540 @@
+COMMAND: /home/quantum/GIT_projects/ZNE_depth_reduced/.venv/bin/python /home/quantum/GIT_projects/ZNE_depth_reduced/ZNE_depth_reduced_local.py --machine gpu --backend aer_simulator --noise constant_depolarizing --num-qubits 1 --unitary random_type --depth 30 --report-directory /home/quantum/GIT_projects/ZNE_depth_reduced/zne_reports --shots 1000 --base-seed 150 --gate-weight-1q 0.3 --gate-weight-2q 0.7 --fold-factors 1 3 5 7 --max-simulator-physical-qubits 40
+
+Logical qubits: 1; physical qubits: 1; fold factor: 1
+Reusable pool; assignment=dynamic; routing=cycle; input placement=first_use
+Initial input map (logical -> physical): {0: 0}
+First use of each input (1-based G index, None = never): [1]
+Bell links: 0; possible full Bell histories: 1
+Output map (logical -> physical): {0: 0}
+  G1: random_type_G1 [selected depth 1/1], active=[0], directions={0: 'none'}, corrected outputs=[0], reset=[]
+    first-used inputs: {0: 0} ; working prefix: 1
+    copies in active-logical order: [[0]]
+    protected spectators (logical -> physical): {}
+  G2: random_type_G2 [selected depth 1/1], active=[0], directions={0: 'none'}, corrected outputs=[0], reset=[]
+    first-used inputs: {} ; working prefix: 1
+    copies in active-logical order: [[0]]
+    protected spectators (logical -> physical): {}
+  G3: random_type_G3 [selected depth 1/1], active=[0], directions={0: 'none'}, corrected outputs=[0], reset=[]
+    first-used inputs: {} ; working prefix: 1
+    copies in active-logical order: [[0]]
+    protected spectators (logical -> physical): {}
+  G4: random_type_G4 [selected depth 1/1], active=[0], directions={0: 'none'}, corrected outputs=[0], reset=[]
+    first-used inputs: {} ; working prefix: 1
+    copies in active-logical order: [[0]]
+    protected spectators (logical -> physical): {}
+  G5: random_type_G5 [selected depth 1/1], active=[0], directions={0: 'none'}, corrected outputs=[0], reset=[]
+    first-used inputs: {} ; working prefix: 1
+    copies in active-logical order: [[0]]
+    protected spectators (logical -> physical): {}
+  G6: random_type_G6 [selected depth 1/1], active=[0], directions={0: 'none'}, corrected outputs=[0], reset=[]
+    first-used inputs: {} ; working prefix: 1
+    copies in active-logical order: [[0]]
+    protected spectators (logical -> physical): {}
+  G7: random_type_G7 [selected depth 1/1], active=[0], directions={0: 'none'}, corrected outputs=[0], reset=[]
+    first-used inputs: {} ; working prefix: 1
+    copies in active-logical order: [[0]]
+    protected spectators (logical -> physical): {}
+  G8: random_type_G8 [selected depth 1/1], active=[0], directions={0: 'none'}, corrected outputs=[0], reset=[]
+    first-used inputs: {} ; working prefix: 1
+    copies in active-logical order: [[0]]
+    protected spectators (logical -> physical): {}
+  G9: random_type_G9 [selected depth 1/1], active=[0], directions={0: 'none'}, corrected outputs=[0], reset=[]
+    first-used inputs: {} ; working prefix: 1
+    copies in active-logical order: [[0]]
+    protected spectators (logical -> physical): {}
+  G10: random_type_G10 [selected depth 1/1], active=[0], directions={0: 'none'}, corrected outputs=[0], reset=[]
+    first-used inputs: {} ; working prefix: 1
+    copies in active-logical order: [[0]]
+    protected spectators (logical -> physical): {}
+  G11: random_type_G11 [selected depth 1/1], active=[0], directions={0: 'none'}, corrected outputs=[0], reset=[]
+    first-used inputs: {} ; working prefix: 1
+    copies in active-logical order: [[0]]
+    protected spectators (logical -> physical): {}
+  G12: random_type_G12 [selected depth 1/1], active=[0], directions={0: 'none'}, corrected outputs=[0], reset=[]
+    first-used inputs: {} ; working prefix: 1
+    copies in active-logical order: [[0]]
+    protected spectators (logical -> physical): {}
+  G13: random_type_G13 [selected depth 1/1], active=[0], directions={0: 'none'}, corrected outputs=[0], reset=[]
+    first-used inputs: {} ; working prefix: 1
+    copies in active-logical order: [[0]]
+    protected spectators (logical -> physical): {}
+  G14: random_type_G14 [selected depth 1/1], active=[0], directions={0: 'none'}, corrected outputs=[0], reset=[]
+    first-used inputs: {} ; working prefix: 1
+    copies in active-logical order: [[0]]
+    protected spectators (logical -> physical): {}
+  G15: random_type_G15 [selected depth 1/1], active=[0], directions={0: 'none'}, corrected outputs=[0], reset=[]
+    first-used inputs: {} ; working prefix: 1
+    copies in active-logical order: [[0]]
+    protected spectators (logical -> physical): {}
+  G16: random_type_G16 [selected depth 1/1], active=[0], directions={0: 'none'}, corrected outputs=[0], reset=[]
+    first-used inputs: {} ; working prefix: 1
+    copies in active-logical order: [[0]]
+    protected spectators (logical -> physical): {}
+  G17: random_type_G17 [selected depth 1/1], active=[0], directions={0: 'none'}, corrected outputs=[0], reset=[]
+    first-used inputs: {} ; working prefix: 1
+    copies in active-logical order: [[0]]
+    protected spectators (logical -> physical): {}
+  G18: random_type_G18 [selected depth 1/1], active=[0], directions={0: 'none'}, corrected outputs=[0], reset=[]
+    first-used inputs: {} ; working prefix: 1
+    copies in active-logical order: [[0]]
+    protected spectators (logical -> physical): {}
+  G19: random_type_G19 [selected depth 1/1], active=[0], directions={0: 'none'}, corrected outputs=[0], reset=[]
+    first-used inputs: {} ; working prefix: 1
+    copies in active-logical order: [[0]]
+    protected spectators (logical -> physical): {}
+  G20: random_type_G20 [selected depth 1/1], active=[0], directions={0: 'none'}, corrected outputs=[0], reset=[]
+    first-used inputs: {} ; working prefix: 1
+    copies in active-logical order: [[0]]
+    protected spectators (logical -> physical): {}
+  G21: random_type_G21 [selected depth 1/1], active=[0], directions={0: 'none'}, corrected outputs=[0], reset=[]
+    first-used inputs: {} ; working prefix: 1
+    copies in active-logical order: [[0]]
+    protected spectators (logical -> physical): {}
+  G22: random_type_G22 [selected depth 1/1], active=[0], directions={0: 'none'}, corrected outputs=[0], reset=[]
+    first-used inputs: {} ; working prefix: 1
+    copies in active-logical order: [[0]]
+    protected spectators (logical -> physical): {}
+  G23: random_type_G23 [selected depth 1/1], active=[0], directions={0: 'none'}, corrected outputs=[0], reset=[]
+    first-used inputs: {} ; working prefix: 1
+    copies in active-logical order: [[0]]
+    protected spectators (logical -> physical): {}
+  G24: random_type_G24 [selected depth 1/1], active=[0], directions={0: 'none'}, corrected outputs=[0], reset=[]
+    first-used inputs: {} ; working prefix: 1
+    copies in active-logical order: [[0]]
+    protected spectators (logical -> physical): {}
+  G25: random_type_G25 [selected depth 1/1], active=[0], directions={0: 'none'}, corrected outputs=[0], reset=[]
+    first-used inputs: {} ; working prefix: 1
+    copies in active-logical order: [[0]]
+    protected spectators (logical -> physical): {}
+  G26: random_type_G26 [selected depth 1/1], active=[0], directions={0: 'none'}, corrected outputs=[0], reset=[]
+    first-used inputs: {} ; working prefix: 1
+    copies in active-logical order: [[0]]
+    protected spectators (logical -> physical): {}
+  G27: random_type_G27 [selected depth 1/1], active=[0], directions={0: 'none'}, corrected outputs=[0], reset=[]
+    first-used inputs: {} ; working prefix: 1
+    copies in active-logical order: [[0]]
+    protected spectators (logical -> physical): {}
+  G28: random_type_G28 [selected depth 1/1], active=[0], directions={0: 'none'}, corrected outputs=[0], reset=[]
+    first-used inputs: {} ; working prefix: 1
+    copies in active-logical order: [[0]]
+    protected spectators (logical -> physical): {}
+  G29: random_type_G29 [selected depth 1/1], active=[0], directions={0: 'none'}, corrected outputs=[0], reset=[]
+    first-used inputs: {} ; working prefix: 1
+    copies in active-logical order: [[0]]
+    protected spectators (logical -> physical): {}
+  G30: random_type_G30 [selected depth 1/1], active=[0], directions={0: 'none'}, corrected outputs=[0], reset=[]
+    first-used inputs: {} ; working prefix: 1
+    copies in active-logical order: [[0]]
+    protected spectators (logical -> physical): {}
+Logical qubits: 1; physical qubits: 3; fold factor: 3
+Reusable pool; assignment=dynamic; routing=cycle; input placement=first_use
+Initial input map (logical -> physical): {0: 0}
+First use of each input (1-based G index, None = never): [1]
+Bell links: 30; possible full Bell histories: 1152921504606846976
+Output map (logical -> physical): {0: 1}
+  G1: random_type_G1 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[2], reset=[0, 1]
+    first-used inputs: {0: 0} ; working prefix: 3
+    copies in active-logical order: [[0], [1], [2]]
+    protected spectators (logical -> physical): {}
+  G2: random_type_G2 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[1], reset=[2, 0]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[2], [0], [1]]
+    protected spectators (logical -> physical): {}
+  G3: random_type_G3 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[2], reset=[1, 0]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[1], [0], [2]]
+    protected spectators (logical -> physical): {}
+  G4: random_type_G4 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[1], reset=[2, 0]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[2], [0], [1]]
+    protected spectators (logical -> physical): {}
+  G5: random_type_G5 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[2], reset=[1, 0]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[1], [0], [2]]
+    protected spectators (logical -> physical): {}
+  G6: random_type_G6 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[1], reset=[2, 0]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[2], [0], [1]]
+    protected spectators (logical -> physical): {}
+  G7: random_type_G7 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[2], reset=[1, 0]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[1], [0], [2]]
+    protected spectators (logical -> physical): {}
+  G8: random_type_G8 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[1], reset=[2, 0]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[2], [0], [1]]
+    protected spectators (logical -> physical): {}
+  G9: random_type_G9 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[2], reset=[1, 0]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[1], [0], [2]]
+    protected spectators (logical -> physical): {}
+  G10: random_type_G10 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[1], reset=[2, 0]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[2], [0], [1]]
+    protected spectators (logical -> physical): {}
+  G11: random_type_G11 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[2], reset=[1, 0]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[1], [0], [2]]
+    protected spectators (logical -> physical): {}
+  G12: random_type_G12 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[1], reset=[2, 0]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[2], [0], [1]]
+    protected spectators (logical -> physical): {}
+  G13: random_type_G13 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[2], reset=[1, 0]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[1], [0], [2]]
+    protected spectators (logical -> physical): {}
+  G14: random_type_G14 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[1], reset=[2, 0]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[2], [0], [1]]
+    protected spectators (logical -> physical): {}
+  G15: random_type_G15 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[2], reset=[1, 0]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[1], [0], [2]]
+    protected spectators (logical -> physical): {}
+  G16: random_type_G16 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[1], reset=[2, 0]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[2], [0], [1]]
+    protected spectators (logical -> physical): {}
+  G17: random_type_G17 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[2], reset=[1, 0]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[1], [0], [2]]
+    protected spectators (logical -> physical): {}
+  G18: random_type_G18 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[1], reset=[2, 0]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[2], [0], [1]]
+    protected spectators (logical -> physical): {}
+  G19: random_type_G19 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[2], reset=[1, 0]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[1], [0], [2]]
+    protected spectators (logical -> physical): {}
+  G20: random_type_G20 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[1], reset=[2, 0]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[2], [0], [1]]
+    protected spectators (logical -> physical): {}
+  G21: random_type_G21 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[2], reset=[1, 0]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[1], [0], [2]]
+    protected spectators (logical -> physical): {}
+  G22: random_type_G22 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[1], reset=[2, 0]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[2], [0], [1]]
+    protected spectators (logical -> physical): {}
+  G23: random_type_G23 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[2], reset=[1, 0]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[1], [0], [2]]
+    protected spectators (logical -> physical): {}
+  G24: random_type_G24 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[1], reset=[2, 0]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[2], [0], [1]]
+    protected spectators (logical -> physical): {}
+  G25: random_type_G25 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[2], reset=[1, 0]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[1], [0], [2]]
+    protected spectators (logical -> physical): {}
+  G26: random_type_G26 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[1], reset=[2, 0]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[2], [0], [1]]
+    protected spectators (logical -> physical): {}
+  G27: random_type_G27 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[2], reset=[1, 0]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[1], [0], [2]]
+    protected spectators (logical -> physical): {}
+  G28: random_type_G28 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[1], reset=[2, 0]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[2], [0], [1]]
+    protected spectators (logical -> physical): {}
+  G29: random_type_G29 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[2], reset=[1, 0]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[1], [0], [2]]
+    protected spectators (logical -> physical): {}
+  G30: random_type_G30 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[1], reset=[2, 0]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[2], [0], [1]]
+    protected spectators (logical -> physical): {}
+Logical qubits: 1; physical qubits: 5; fold factor: 5
+Reusable pool; assignment=dynamic; routing=cycle; input placement=first_use
+Initial input map (logical -> physical): {0: 0}
+First use of each input (1-based G index, None = never): [1]
+Bell links: 60; possible full Bell histories: 1329227995784915872903807060280344576
+Output map (logical -> physical): {0: 3}
+  G1: random_type_G1 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[4], reset=[0, 1, 2, 3]
+    first-used inputs: {0: 0} ; working prefix: 5
+    copies in active-logical order: [[0], [1], [2], [3], [4]]
+    protected spectators (logical -> physical): {}
+  G2: random_type_G2 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[3], reset=[4, 0, 1, 2]
+    first-used inputs: {} ; working prefix: 5
+    copies in active-logical order: [[4], [0], [1], [2], [3]]
+    protected spectators (logical -> physical): {}
+  G3: random_type_G3 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[4], reset=[3, 0, 1, 2]
+    first-used inputs: {} ; working prefix: 5
+    copies in active-logical order: [[3], [0], [1], [2], [4]]
+    protected spectators (logical -> physical): {}
+  G4: random_type_G4 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[3], reset=[4, 0, 1, 2]
+    first-used inputs: {} ; working prefix: 5
+    copies in active-logical order: [[4], [0], [1], [2], [3]]
+    protected spectators (logical -> physical): {}
+  G5: random_type_G5 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[4], reset=[3, 0, 1, 2]
+    first-used inputs: {} ; working prefix: 5
+    copies in active-logical order: [[3], [0], [1], [2], [4]]
+    protected spectators (logical -> physical): {}
+  G6: random_type_G6 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[3], reset=[4, 0, 1, 2]
+    first-used inputs: {} ; working prefix: 5
+    copies in active-logical order: [[4], [0], [1], [2], [3]]
+    protected spectators (logical -> physical): {}
+  G7: random_type_G7 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[4], reset=[3, 0, 1, 2]
+    first-used inputs: {} ; working prefix: 5
+    copies in active-logical order: [[3], [0], [1], [2], [4]]
+    protected spectators (logical -> physical): {}
+  G8: random_type_G8 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[3], reset=[4, 0, 1, 2]
+    first-used inputs: {} ; working prefix: 5
+    copies in active-logical order: [[4], [0], [1], [2], [3]]
+    protected spectators (logical -> physical): {}
+  G9: random_type_G9 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[4], reset=[3, 0, 1, 2]
+    first-used inputs: {} ; working prefix: 5
+    copies in active-logical order: [[3], [0], [1], [2], [4]]
+    protected spectators (logical -> physical): {}
+  G10: random_type_G10 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[3], reset=[4, 0, 1, 2]
+    first-used inputs: {} ; working prefix: 5
+    copies in active-logical order: [[4], [0], [1], [2], [3]]
+    protected spectators (logical -> physical): {}
+  G11: random_type_G11 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[4], reset=[3, 0, 1, 2]
+    first-used inputs: {} ; working prefix: 5
+    copies in active-logical order: [[3], [0], [1], [2], [4]]
+    protected spectators (logical -> physical): {}
+  G12: random_type_G12 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[3], reset=[4, 0, 1, 2]
+    first-used inputs: {} ; working prefix: 5
+    copies in active-logical order: [[4], [0], [1], [2], [3]]
+    protected spectators (logical -> physical): {}
+  G13: random_type_G13 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[4], reset=[3, 0, 1, 2]
+    first-used inputs: {} ; working prefix: 5
+    copies in active-logical order: [[3], [0], [1], [2], [4]]
+    protected spectators (logical -> physical): {}
+  G14: random_type_G14 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[3], reset=[4, 0, 1, 2]
+    first-used inputs: {} ; working prefix: 5
+    copies in active-logical order: [[4], [0], [1], [2], [3]]
+    protected spectators (logical -> physical): {}
+  G15: random_type_G15 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[4], reset=[3, 0, 1, 2]
+    first-used inputs: {} ; working prefix: 5
+    copies in active-logical order: [[3], [0], [1], [2], [4]]
+    protected spectators (logical -> physical): {}
+  G16: random_type_G16 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[3], reset=[4, 0, 1, 2]
+    first-used inputs: {} ; working prefix: 5
+    copies in active-logical order: [[4], [0], [1], [2], [3]]
+    protected spectators (logical -> physical): {}
+  G17: random_type_G17 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[4], reset=[3, 0, 1, 2]
+    first-used inputs: {} ; working prefix: 5
+    copies in active-logical order: [[3], [0], [1], [2], [4]]
+    protected spectators (logical -> physical): {}
+  G18: random_type_G18 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[3], reset=[4, 0, 1, 2]
+    first-used inputs: {} ; working prefix: 5
+    copies in active-logical order: [[4], [0], [1], [2], [3]]
+    protected spectators (logical -> physical): {}
+  G19: random_type_G19 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[4], reset=[3, 0, 1, 2]
+    first-used inputs: {} ; working prefix: 5
+    copies in active-logical order: [[3], [0], [1], [2], [4]]
+    protected spectators (logical -> physical): {}
+  G20: random_type_G20 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[3], reset=[4, 0, 1, 2]
+    first-used inputs: {} ; working prefix: 5
+    copies in active-logical order: [[4], [0], [1], [2], [3]]
+    protected spectators (logical -> physical): {}
+  G21: random_type_G21 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[4], reset=[3, 0, 1, 2]
+    first-used inputs: {} ; working prefix: 5
+    copies in active-logical order: [[3], [0], [1], [2], [4]]
+    protected spectators (logical -> physical): {}
+  G22: random_type_G22 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[3], reset=[4, 0, 1, 2]
+    first-used inputs: {} ; working prefix: 5
+    copies in active-logical order: [[4], [0], [1], [2], [3]]
+    protected spectators (logical -> physical): {}
+  G23: random_type_G23 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[4], reset=[3, 0, 1, 2]
+    first-used inputs: {} ; working prefix: 5
+    copies in active-logical order: [[3], [0], [1], [2], [4]]
+    protected spectators (logical -> physical): {}
+  G24: random_type_G24 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[3], reset=[4, 0, 1, 2]
+    first-used inputs: {} ; working prefix: 5
+    copies in active-logical order: [[4], [0], [1], [2], [3]]
+    protected spectators (logical -> physical): {}
+  G25: random_type_G25 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[4], reset=[3, 0, 1, 2]
+    first-used inputs: {} ; working prefix: 5
+    copies in active-logical order: [[3], [0], [1], [2], [4]]
+    protected spectators (logical -> physical): {}
+  G26: random_type_G26 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[3], reset=[4, 0, 1, 2]
+    first-used inputs: {} ; working prefix: 5
+    copies in active-logical order: [[4], [0], [1], [2], [3]]
+    protected spectators (logical -> physical): {}
+  G27: random_type_G27 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[4], reset=[3, 0, 1, 2]
+    first-used inputs: {} ; working prefix: 5
+    copies in active-logical order: [[3], [0], [1], [2], [4]]
+    protected spectators (logical -> physical): {}
+  G28: random_type_G28 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[3], reset=[4, 0, 1, 2]
+    first-used inputs: {} ; working prefix: 5
+    copies in active-logical order: [[4], [0], [1], [2], [3]]
+    protected spectators (logical -> physical): {}
+  G29: random_type_G29 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[4], reset=[3, 0, 1, 2]
+    first-used inputs: {} ; working prefix: 5
+    copies in active-logical order: [[3], [0], [1], [2], [4]]
+    protected spectators (logical -> physical): {}
+  G30: random_type_G30 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[3], reset=[4, 0, 1, 2]
+    first-used inputs: {} ; working prefix: 5
+    copies in active-logical order: [[4], [0], [1], [2], [3]]
+    protected spectators (logical -> physical): {}
+Logical qubits: 1; physical qubits: 7; fold factor: 7
+Reusable pool; assignment=dynamic; routing=cycle; input placement=first_use
+Initial input map (logical -> physical): {0: 0}
+First use of each input (1-based G index, None = never): [1]
+Bell links: 90; possible full Bell histories: 1532495540865888858358347027150309183618739122183602176
+Output map (logical -> physical): {0: 5}
+  G1: random_type_G1 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[6], reset=[0, 1, 2, 3, 4, 5]
+    first-used inputs: {0: 0} ; working prefix: 7
+    copies in active-logical order: [[0], [1], [2], [3], [4], [5], [6]]
+    protected spectators (logical -> physical): {}
+  G2: random_type_G2 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[5], reset=[6, 0, 1, 2, 3, 4]
+    first-used inputs: {} ; working prefix: 7
+    copies in active-logical order: [[6], [0], [1], [2], [3], [4], [5]]
+    protected spectators (logical -> physical): {}
+  G3: random_type_G3 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[6], reset=[5, 0, 1, 2, 3, 4]
+    first-used inputs: {} ; working prefix: 7
+    copies in active-logical order: [[5], [0], [1], [2], [3], [4], [6]]
+    protected spectators (logical -> physical): {}
+  G4: random_type_G4 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[5], reset=[6, 0, 1, 2, 3, 4]
+    first-used inputs: {} ; working prefix: 7
+    copies in active-logical order: [[6], [0], [1], [2], [3], [4], [5]]
+    protected spectators (logical -> physical): {}
+  G5: random_type_G5 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[6], reset=[5, 0, 1, 2, 3, 4]
+    first-used inputs: {} ; working prefix: 7
+    copies in active-logical order: [[5], [0], [1], [2], [3], [4], [6]]
+    protected spectators (logical -> physical): {}
+  G6: random_type_G6 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[5], reset=[6, 0, 1, 2, 3, 4]
+    first-used inputs: {} ; working prefix: 7
+    copies in active-logical order: [[6], [0], [1], [2], [3], [4], [5]]
+    protected spectators (logical -> physical): {}
+  G7: random_type_G7 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[6], reset=[5, 0, 1, 2, 3, 4]
+    first-used inputs: {} ; working prefix: 7
+    copies in active-logical order: [[5], [0], [1], [2], [3], [4], [6]]
+    protected spectators (logical -> physical): {}
+  G8: random_type_G8 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[5], reset=[6, 0, 1, 2, 3, 4]
+    first-used inputs: {} ; working prefix: 7
+    copies in active-logical order: [[6], [0], [1], [2], [3], [4], [5]]
+    protected spectators (logical -> physical): {}
+  G9: random_type_G9 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[6], reset=[5, 0, 1, 2, 3, 4]
+    first-used inputs: {} ; working prefix: 7
+    copies in active-logical order: [[5], [0], [1], [2], [3], [4], [6]]
+    protected spectators (logical -> physical): {}
+  G10: random_type_G10 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[5], reset=[6, 0, 1, 2, 3, 4]
+    first-used inputs: {} ; working prefix: 7
+    copies in active-logical order: [[6], [0], [1], [2], [3], [4], [5]]
+    protected spectators (logical -> physical): {}
+  G11: random_type_G11 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[6], reset=[5, 0, 1, 2, 3, 4]
+    first-used inputs: {} ; working prefix: 7
+    copies in active-logical order: [[5], [0], [1], [2], [3], [4], [6]]
+    protected spectators (logical -> physical): {}
+  G12: random_type_G12 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[5], reset=[6, 0, 1, 2, 3, 4]
+    first-used inputs: {} ; working prefix: 7
+    copies in active-logical order: [[6], [0], [1], [2], [3], [4], [5]]
+    protected spectators (logical -> physical): {}
+  G13: random_type_G13 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[6], reset=[5, 0, 1, 2, 3, 4]
+    first-used inputs: {} ; working prefix: 7
+    copies in active-logical order: [[5], [0], [1], [2], [3], [4], [6]]
+    protected spectators (logical -> physical): {}
+  G14: random_type_G14 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[5], reset=[6, 0, 1, 2, 3, 4]
+    first-used inputs: {} ; working prefix: 7
+    copies in active-logical order: [[6], [0], [1], [2], [3], [4], [5]]
+    protected spectators (logical -> physical): {}
+  G15: random_type_G15 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[6], reset=[5, 0, 1, 2, 3, 4]
+    first-used inputs: {} ; working prefix: 7
+    copies in active-logical order: [[5], [0], [1], [2], [3], [4], [6]]
+    protected spectators (logical -> physical): {}
+  G16: random_type_G16 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[5], reset=[6, 0, 1, 2, 3, 4]
+    first-used inputs: {} ; working prefix: 7
+    copies in active-logical order: [[6], [0], [1], [2], [3], [4], [5]]
+    protected spectators (logical -> physical): {}
+  G17: random_type_G17 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[6], reset=[5, 0, 1, 2, 3, 4]
+    first-used inputs: {} ; working prefix: 7
+    copies in active-logical order: [[5], [0], [1], [2], [3], [4], [6]]
+    protected spectators (logical -> physical): {}
+  G18: random_type_G18 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[5], reset=[6, 0, 1, 2, 3, 4]
+    first-used inputs: {} ; working prefix: 7
+    copies in active-logical order: [[6], [0], [1], [2], [3], [4], [5]]
+    protected spectators (logical -> physical): {}
+  G19: random_type_G19 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[6], reset=[5, 0, 1, 2, 3, 4]
+    first-used inputs: {} ; working prefix: 7
+    copies in active-logical order: [[5], [0], [1], [2], [3], [4], [6]]
+    protected spectators (logical -> physical): {}
+  G20: random_type_G20 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[5], reset=[6, 0, 1, 2, 3, 4]
+    first-used inputs: {} ; working prefix: 7
+    copies in active-logical order: [[6], [0], [1], [2], [3], [4], [5]]
+    protected spectators (logical -> physical): {}
+  G21: random_type_G21 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[6], reset=[5, 0, 1, 2, 3, 4]
+    first-used inputs: {} ; working prefix: 7
+    copies in active-logical order: [[5], [0], [1], [2], [3], [4], [6]]
+    protected spectators (logical -> physical): {}
+  G22: random_type_G22 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[5], reset=[6, 0, 1, 2, 3, 4]
+    first-used inputs: {} ; working prefix: 7
+    copies in active-logical order: [[6], [0], [1], [2], [3], [4], [5]]
+    protected spectators (logical -> physical): {}
+  G23: random_type_G23 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[6], reset=[5, 0, 1, 2, 3, 4]
+    first-used inputs: {} ; working prefix: 7
+    copies in active-logical order: [[5], [0], [1], [2], [3], [4], [6]]
+    protected spectators (logical -> physical): {}
+  G24: random_type_G24 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[5], reset=[6, 0, 1, 2, 3, 4]
+    first-used inputs: {} ; working prefix: 7
+    copies in active-logical order: [[6], [0], [1], [2], [3], [4], [5]]
+    protected spectators (logical -> physical): {}
+  G25: random_type_G25 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[6], reset=[5, 0, 1, 2, 3, 4]
+    first-used inputs: {} ; working prefix: 7
+    copies in active-logical order: [[5], [0], [1], [2], [3], [4], [6]]
+    protected spectators (logical -> physical): {}
+  G26: random_type_G26 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[5], reset=[6, 0, 1, 2, 3, 4]
+    first-used inputs: {} ; working prefix: 7
+    copies in active-logical order: [[6], [0], [1], [2], [3], [4], [5]]
+    protected spectators (logical -> physical): {}
+  G27: random_type_G27 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[6], reset=[5, 0, 1, 2, 3, 4]
+    first-used inputs: {} ; working prefix: 7
+    copies in active-logical order: [[5], [0], [1], [2], [3], [4], [6]]
+    protected spectators (logical -> physical): {}
+  G28: random_type_G28 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[5], reset=[6, 0, 1, 2, 3, 4]
+    first-used inputs: {} ; working prefix: 7
+    copies in active-logical order: [[6], [0], [1], [2], [3], [4], [5]]
+    protected spectators (logical -> physical): {}
+  G29: random_type_G29 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[6], reset=[5, 0, 1, 2, 3, 4]
+    first-used inputs: {} ; working prefix: 7
+    copies in active-logical order: [[5], [0], [1], [2], [3], [4], [6]]
+    protected spectators (logical -> physical): {}
+  G30: random_type_G30 [selected depth 1/1], active=[0], directions={0: 'down'}, corrected outputs=[5], reset=[6, 0, 1, 2, 3, 4]
+    first-used inputs: {} ; working prefix: 7
+    copies in active-logical order: [[6], [0], [1], [2], [3], [4], [5]]
+    protected spectators (logical -> physical): {}
+
+UNITARY_TYPE = random_type
+type=random_type, qubits=1, selected depth=30/120, local components=30
+DEPTH = 30; maximum configured depth = 120
+Machine: GPU
+Backend: AerSimulator
+Noise: constant depolarizing
+
+Expectation values of local method:
+[-0.0960, 0.0040, -0.0020, 0.0180]
+
+Gate-count-axis extrapolation to N = 0
+
+before_weighted: N = 0.3*N_1q + 0.7*N_2q
+N = [9.6, 141.6, 273.6, 405.6]
+linear: -0.0718 at N=0 (RMSE=2.486e-02)
+exponential: -0.2474 at N=0 (RMSE=9.274e-03)
+
+before_two_qubit: N = N_2q
+N = [0, 60, 120, 180]
+linear: -0.0694 at N=0 (RMSE=2.486e-02)
+exponential: -0.0960 at N=0 (RMSE=9.274e-03)
+
+after_weighted: N = 0.3*N_1q + 0.7*N_2q
+N = [9.6, 141.6, 273.6, 405.6]
+linear: -0.0718 at N=0 (RMSE=2.486e-02)
+exponential: -0.2474 at N=0 (RMSE=9.274e-03)
+
+after_two_qubit: N = N_2q
+N = [0, 60, 120, 180]
+linear: -0.0694 at N=0 (RMSE=2.486e-02)
+exponential: -0.0960 at N=0 (RMSE=9.274e-03)
+
+Report saved to: /home/quantum/GIT_projects/ZNE_depth_reduced/zne_reports/1q_random_type_30_GPU_constant_depolarizing_local.json

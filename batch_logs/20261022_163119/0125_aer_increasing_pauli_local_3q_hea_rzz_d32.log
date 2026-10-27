@@ -1,0 +1,316 @@
+COMMAND: /home/quantum/GIT_projects/ZNE_depth_reduced/.venv/bin/python /home/quantum/GIT_projects/ZNE_depth_reduced/ZNE_depth_reduced_local.py --machine gpu --backend aer_simulator --noise increasing_random_pauli --num-qubits 3 --unitary hea_rzz --depth 32 --report-directory /home/quantum/GIT_projects/ZNE_depth_reduced/zne_reports --shots 1000 --base-seed 150 --gate-weight-1q 0.3 --gate-weight-2q 0.7 --fold-factors 1 3 5 7 --max-simulator-physical-qubits 40
+
+Logical qubits: 3; physical qubits: 3; fold factor: 1
+Reusable pool; assignment=dynamic; routing=cycle; input placement=first_use
+Initial input map (logical -> physical): {0: 0, 1: 1, 2: 2}
+First use of each input (1-based G index, None = never): [1, 1, 1]
+Bell links: 0; possible full Bell histories: 1
+Output map (logical -> physical): {0: 0, 1: 1, 2: 2}
+  G1: hea_rzz_B0_RY [selected depth 1/1], active=[0, 1, 2], directions={0: 'none', 1: 'none', 2: 'none'}, corrected outputs=[0, 1, 2], reset=[]
+    first-used inputs: {0: 0, 1: 1, 2: 2} ; working prefix: 3
+    copies in active-logical order: [[0, 1, 2]]
+    protected spectators (logical -> physical): {}
+  G2: hea_rzz_B0_RZ [selected depth 1/1], active=[0, 1, 2], directions={0: 'none', 1: 'none', 2: 'none'}, corrected outputs=[0, 1, 2], reset=[]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[0, 1, 2]]
+    protected spectators (logical -> physical): {}
+  G3: hea_rzz_B0_A [selected depth 3/3], active=[0, 1], directions={0: 'none', 1: 'none'}, corrected outputs=[0, 1, 2], reset=[]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[0, 1]]
+    protected spectators (logical -> physical): {2: 2}
+  G4: hea_rzz_B0_B [selected depth 3/3], active=[1, 2], directions={1: 'none', 2: 'none'}, corrected outputs=[0, 1, 2], reset=[]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[1, 2]]
+    protected spectators (logical -> physical): {0: 0}
+  G5: hea_rzz_B1_RY [selected depth 1/1], active=[0, 1, 2], directions={0: 'none', 1: 'none', 2: 'none'}, corrected outputs=[0, 1, 2], reset=[]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[0, 1, 2]]
+    protected spectators (logical -> physical): {}
+  G6: hea_rzz_B1_RZ [selected depth 1/1], active=[0, 1, 2], directions={0: 'none', 1: 'none', 2: 'none'}, corrected outputs=[0, 1, 2], reset=[]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[0, 1, 2]]
+    protected spectators (logical -> physical): {}
+  G7: hea_rzz_B1_A [selected depth 3/3], active=[0, 1], directions={0: 'none', 1: 'none'}, corrected outputs=[0, 1, 2], reset=[]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[0, 1]]
+    protected spectators (logical -> physical): {2: 2}
+  G8: hea_rzz_B1_B [selected depth 3/3], active=[1, 2], directions={1: 'none', 2: 'none'}, corrected outputs=[0, 1, 2], reset=[]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[1, 2]]
+    protected spectators (logical -> physical): {0: 0}
+  G9: hea_rzz_B2_RY [selected depth 1/1], active=[0, 1, 2], directions={0: 'none', 1: 'none', 2: 'none'}, corrected outputs=[0, 1, 2], reset=[]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[0, 1, 2]]
+    protected spectators (logical -> physical): {}
+  G10: hea_rzz_B2_RZ [selected depth 1/1], active=[0, 1, 2], directions={0: 'none', 1: 'none', 2: 'none'}, corrected outputs=[0, 1, 2], reset=[]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[0, 1, 2]]
+    protected spectators (logical -> physical): {}
+  G11: hea_rzz_B2_A [selected depth 3/3], active=[0, 1], directions={0: 'none', 1: 'none'}, corrected outputs=[0, 1, 2], reset=[]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[0, 1]]
+    protected spectators (logical -> physical): {2: 2}
+  G12: hea_rzz_B2_B [selected depth 3/3], active=[1, 2], directions={1: 'none', 2: 'none'}, corrected outputs=[0, 1, 2], reset=[]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[1, 2]]
+    protected spectators (logical -> physical): {0: 0}
+  G13: hea_rzz_B3_RY [selected depth 1/1], active=[0, 1, 2], directions={0: 'none', 1: 'none', 2: 'none'}, corrected outputs=[0, 1, 2], reset=[]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[0, 1, 2]]
+    protected spectators (logical -> physical): {}
+  G14: hea_rzz_B3_RZ [selected depth 1/1], active=[0, 1, 2], directions={0: 'none', 1: 'none', 2: 'none'}, corrected outputs=[0, 1, 2], reset=[]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[0, 1, 2]]
+    protected spectators (logical -> physical): {}
+  G15: hea_rzz_B3_A [selected depth 3/3], active=[0, 1], directions={0: 'none', 1: 'none'}, corrected outputs=[0, 1, 2], reset=[]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[0, 1]]
+    protected spectators (logical -> physical): {2: 2}
+  G16: hea_rzz_B3_B [selected depth 3/3], active=[1, 2], directions={1: 'none', 2: 'none'}, corrected outputs=[0, 1, 2], reset=[]
+    first-used inputs: {} ; working prefix: 3
+    copies in active-logical order: [[1, 2]]
+    protected spectators (logical -> physical): {0: 0}
+Logical qubits: 3; physical qubits: 9; fold factor: 3
+Reusable pool; assignment=dynamic; routing=cycle; input placement=first_use
+Initial input map (logical -> physical): {0: 0, 1: 1, 2: 2}
+First use of each input (1-based G index, None = never): [1, 1, 1]
+Bell links: 40; possible full Bell histories: 1208925819614629174706176
+Output map (logical -> physical): {0: 2, 1: 3, 2: 4}
+  G1: hea_rzz_B0_RY [selected depth 1/1], active=[0, 1, 2], directions={0: 'down', 1: 'down', 2: 'down'}, corrected outputs=[6, 7, 8], reset=[0, 3, 1, 4, 2, 5]
+    first-used inputs: {0: 0, 1: 1, 2: 2} ; working prefix: 9
+    copies in active-logical order: [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
+    protected spectators (logical -> physical): {}
+  G2: hea_rzz_B0_RZ [selected depth 1/1], active=[0, 1, 2], directions={0: 'down', 1: 'down', 2: 'down'}, corrected outputs=[3, 4, 5], reset=[6, 0, 7, 1, 8, 2]
+    first-used inputs: {} ; working prefix: 9
+    copies in active-logical order: [[6, 7, 8], [0, 1, 2], [3, 4, 5]]
+    protected spectators (logical -> physical): {}
+  G3: hea_rzz_B0_A [selected depth 3/3], active=[0, 1], directions={0: 'down', 1: 'down'}, corrected outputs=[2, 6, 5], reset=[3, 0, 4, 1]
+    first-used inputs: {} ; working prefix: 9
+    copies in active-logical order: [[3, 4], [0, 1], [2, 6]]
+    protected spectators (logical -> physical): {2: 5}
+  G4: hea_rzz_B0_B [selected depth 3/3], active=[1, 2], directions={1: 'down', 2: 'down'}, corrected outputs=[2, 3, 4], reset=[6, 0, 5, 1]
+    first-used inputs: {} ; working prefix: 9
+    copies in active-logical order: [[6, 5], [0, 1], [3, 4]]
+    protected spectators (logical -> physical): {0: 2}
+  G5: hea_rzz_B1_RY [selected depth 1/1], active=[0, 1, 2], directions={0: 'down', 1: 'down', 2: 'down'}, corrected outputs=[6, 7, 8], reset=[2, 0, 3, 1, 4, 5]
+    first-used inputs: {} ; working prefix: 9
+    copies in active-logical order: [[2, 3, 4], [0, 1, 5], [6, 7, 8]]
+    protected spectators (logical -> physical): {}
+  G6: hea_rzz_B1_RZ [selected depth 1/1], active=[0, 1, 2], directions={0: 'down', 1: 'down', 2: 'down'}, corrected outputs=[3, 4, 5], reset=[6, 0, 7, 1, 8, 2]
+    first-used inputs: {} ; working prefix: 9
+    copies in active-logical order: [[6, 7, 8], [0, 1, 2], [3, 4, 5]]
+    protected spectators (logical -> physical): {}
+  G7: hea_rzz_B1_A [selected depth 3/3], active=[0, 1], directions={0: 'down', 1: 'down'}, corrected outputs=[2, 6, 5], reset=[3, 0, 4, 1]
+    first-used inputs: {} ; working prefix: 9
+    copies in active-logical order: [[3, 4], [0, 1], [2, 6]]
+    protected spectators (logical -> physical): {2: 5}
+  G8: hea_rzz_B1_B [selected depth 3/3], active=[1, 2], directions={1: 'down', 2: 'down'}, corrected outputs=[2, 3, 4], reset=[6, 0, 5, 1]
+    first-used inputs: {} ; working prefix: 9
+    copies in active-logical order: [[6, 5], [0, 1], [3, 4]]
+    protected spectators (logical -> physical): {0: 2}
+  G9: hea_rzz_B2_RY [selected depth 1/1], active=[0, 1, 2], directions={0: 'down', 1: 'down', 2: 'down'}, corrected outputs=[6, 7, 8], reset=[2, 0, 3, 1, 4, 5]
+    first-used inputs: {} ; working prefix: 9
+    copies in active-logical order: [[2, 3, 4], [0, 1, 5], [6, 7, 8]]
+    protected spectators (logical -> physical): {}
+  G10: hea_rzz_B2_RZ [selected depth 1/1], active=[0, 1, 2], directions={0: 'down', 1: 'down', 2: 'down'}, corrected outputs=[3, 4, 5], reset=[6, 0, 7, 1, 8, 2]
+    first-used inputs: {} ; working prefix: 9
+    copies in active-logical order: [[6, 7, 8], [0, 1, 2], [3, 4, 5]]
+    protected spectators (logical -> physical): {}
+  G11: hea_rzz_B2_A [selected depth 3/3], active=[0, 1], directions={0: 'down', 1: 'down'}, corrected outputs=[2, 6, 5], reset=[3, 0, 4, 1]
+    first-used inputs: {} ; working prefix: 9
+    copies in active-logical order: [[3, 4], [0, 1], [2, 6]]
+    protected spectators (logical -> physical): {2: 5}
+  G12: hea_rzz_B2_B [selected depth 3/3], active=[1, 2], directions={1: 'down', 2: 'down'}, corrected outputs=[2, 3, 4], reset=[6, 0, 5, 1]
+    first-used inputs: {} ; working prefix: 9
+    copies in active-logical order: [[6, 5], [0, 1], [3, 4]]
+    protected spectators (logical -> physical): {0: 2}
+  G13: hea_rzz_B3_RY [selected depth 1/1], active=[0, 1, 2], directions={0: 'down', 1: 'down', 2: 'down'}, corrected outputs=[6, 7, 8], reset=[2, 0, 3, 1, 4, 5]
+    first-used inputs: {} ; working prefix: 9
+    copies in active-logical order: [[2, 3, 4], [0, 1, 5], [6, 7, 8]]
+    protected spectators (logical -> physical): {}
+  G14: hea_rzz_B3_RZ [selected depth 1/1], active=[0, 1, 2], directions={0: 'down', 1: 'down', 2: 'down'}, corrected outputs=[3, 4, 5], reset=[6, 0, 7, 1, 8, 2]
+    first-used inputs: {} ; working prefix: 9
+    copies in active-logical order: [[6, 7, 8], [0, 1, 2], [3, 4, 5]]
+    protected spectators (logical -> physical): {}
+  G15: hea_rzz_B3_A [selected depth 3/3], active=[0, 1], directions={0: 'down', 1: 'down'}, corrected outputs=[2, 6, 5], reset=[3, 0, 4, 1]
+    first-used inputs: {} ; working prefix: 9
+    copies in active-logical order: [[3, 4], [0, 1], [2, 6]]
+    protected spectators (logical -> physical): {2: 5}
+  G16: hea_rzz_B3_B [selected depth 3/3], active=[1, 2], directions={1: 'down', 2: 'down'}, corrected outputs=[2, 3, 4], reset=[6, 0, 5, 1]
+    first-used inputs: {} ; working prefix: 9
+    copies in active-logical order: [[6, 5], [0, 1], [3, 4]]
+    protected spectators (logical -> physical): {0: 2}
+Logical qubits: 3; physical qubits: 15; fold factor: 5
+Reusable pool; assignment=dynamic; routing=cycle; input placement=first_use
+Initial input map (logical -> physical): {0: 0, 1: 1, 2: 2}
+First use of each input (1-based G index, None = never): [1, 1, 1]
+Bell links: 80; possible full Bell histories: 1461501637330902918203684832716283019655932542976
+Output map (logical -> physical): {0: 6, 1: 8, 2: 9}
+  G1: hea_rzz_B0_RY [selected depth 1/1], active=[0, 1, 2], directions={0: 'down', 1: 'down', 2: 'down'}, corrected outputs=[12, 13, 14], reset=[0, 3, 1, 4, 2, 5, 6, 9, 7, 10, 8, 11]
+    first-used inputs: {0: 0, 1: 1, 2: 2} ; working prefix: 15
+    copies in active-logical order: [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9, 10, 11], [12, 13, 14]]
+    protected spectators (logical -> physical): {}
+  G2: hea_rzz_B0_RZ [selected depth 1/1], active=[0, 1, 2], directions={0: 'down', 1: 'down', 2: 'down'}, corrected outputs=[9, 10, 11], reset=[12, 0, 13, 1, 14, 2, 3, 6, 4, 7, 5, 8]
+    first-used inputs: {} ; working prefix: 15
+    copies in active-logical order: [[12, 13, 14], [0, 1, 2], [3, 4, 5], [6, 7, 8], [9, 10, 11]]
+    protected spectators (logical -> physical): {}
+  G3: hea_rzz_B0_A [selected depth 3/3], active=[0, 1], directions={0: 'down', 1: 'down'}, corrected outputs=[6, 7, 11], reset=[9, 0, 10, 1, 2, 4, 3, 5]
+    first-used inputs: {} ; working prefix: 15
+    copies in active-logical order: [[9, 10], [0, 1], [2, 3], [4, 5], [6, 7]]
+    protected spectators (logical -> physical): {2: 11}
+  G4: hea_rzz_B0_B [selected depth 3/3], active=[1, 2], directions={1: 'down', 2: 'down'}, corrected outputs=[6, 8, 9], reset=[7, 0, 11, 1, 2, 4, 3, 5]
+    first-used inputs: {} ; working prefix: 15
+    copies in active-logical order: [[7, 11], [0, 1], [2, 3], [4, 5], [8, 9]]
+    protected spectators (logical -> physical): {0: 6}
+  G5: hea_rzz_B1_RY [selected depth 1/1], active=[0, 1, 2], directions={0: 'down', 1: 'down', 2: 'down'}, corrected outputs=[12, 13, 14], reset=[6, 0, 8, 1, 9, 2, 3, 7, 4, 10, 5, 11]
+    first-used inputs: {} ; working prefix: 15
+    copies in active-logical order: [[6, 8, 9], [0, 1, 2], [3, 4, 5], [7, 10, 11], [12, 13, 14]]
+    protected spectators (logical -> physical): {}
+  G6: hea_rzz_B1_RZ [selected depth 1/1], active=[0, 1, 2], directions={0: 'down', 1: 'down', 2: 'down'}, corrected outputs=[9, 10, 11], reset=[12, 0, 13, 1, 14, 2, 3, 6, 4, 7, 5, 8]
+    first-used inputs: {} ; working prefix: 15
+    copies in active-logical order: [[12, 13, 14], [0, 1, 2], [3, 4, 5], [6, 7, 8], [9, 10, 11]]
+    protected spectators (logical -> physical): {}
+  G7: hea_rzz_B1_A [selected depth 3/3], active=[0, 1], directions={0: 'down', 1: 'down'}, corrected outputs=[6, 7, 11], reset=[9, 0, 10, 1, 2, 4, 3, 5]
+    first-used inputs: {} ; working prefix: 15
+    copies in active-logical order: [[9, 10], [0, 1], [2, 3], [4, 5], [6, 7]]
+    protected spectators (logical -> physical): {2: 11}
+  G8: hea_rzz_B1_B [selected depth 3/3], active=[1, 2], directions={1: 'down', 2: 'down'}, corrected outputs=[6, 8, 9], reset=[7, 0, 11, 1, 2, 4, 3, 5]
+    first-used inputs: {} ; working prefix: 15
+    copies in active-logical order: [[7, 11], [0, 1], [2, 3], [4, 5], [8, 9]]
+    protected spectators (logical -> physical): {0: 6}
+  G9: hea_rzz_B2_RY [selected depth 1/1], active=[0, 1, 2], directions={0: 'down', 1: 'down', 2: 'down'}, corrected outputs=[12, 13, 14], reset=[6, 0, 8, 1, 9, 2, 3, 7, 4, 10, 5, 11]
+    first-used inputs: {} ; working prefix: 15
+    copies in active-logical order: [[6, 8, 9], [0, 1, 2], [3, 4, 5], [7, 10, 11], [12, 13, 14]]
+    protected spectators (logical -> physical): {}
+  G10: hea_rzz_B2_RZ [selected depth 1/1], active=[0, 1, 2], directions={0: 'down', 1: 'down', 2: 'down'}, corrected outputs=[9, 10, 11], reset=[12, 0, 13, 1, 14, 2, 3, 6, 4, 7, 5, 8]
+    first-used inputs: {} ; working prefix: 15
+    copies in active-logical order: [[12, 13, 14], [0, 1, 2], [3, 4, 5], [6, 7, 8], [9, 10, 11]]
+    protected spectators (logical -> physical): {}
+  G11: hea_rzz_B2_A [selected depth 3/3], active=[0, 1], directions={0: 'down', 1: 'down'}, corrected outputs=[6, 7, 11], reset=[9, 0, 10, 1, 2, 4, 3, 5]
+    first-used inputs: {} ; working prefix: 15
+    copies in active-logical order: [[9, 10], [0, 1], [2, 3], [4, 5], [6, 7]]
+    protected spectators (logical -> physical): {2: 11}
+  G12: hea_rzz_B2_B [selected depth 3/3], active=[1, 2], directions={1: 'down', 2: 'down'}, corrected outputs=[6, 8, 9], reset=[7, 0, 11, 1, 2, 4, 3, 5]
+    first-used inputs: {} ; working prefix: 15
+    copies in active-logical order: [[7, 11], [0, 1], [2, 3], [4, 5], [8, 9]]
+    protected spectators (logical -> physical): {0: 6}
+  G13: hea_rzz_B3_RY [selected depth 1/1], active=[0, 1, 2], directions={0: 'down', 1: 'down', 2: 'down'}, corrected outputs=[12, 13, 14], reset=[6, 0, 8, 1, 9, 2, 3, 7, 4, 10, 5, 11]
+    first-used inputs: {} ; working prefix: 15
+    copies in active-logical order: [[6, 8, 9], [0, 1, 2], [3, 4, 5], [7, 10, 11], [12, 13, 14]]
+    protected spectators (logical -> physical): {}
+  G14: hea_rzz_B3_RZ [selected depth 1/1], active=[0, 1, 2], directions={0: 'down', 1: 'down', 2: 'down'}, corrected outputs=[9, 10, 11], reset=[12, 0, 13, 1, 14, 2, 3, 6, 4, 7, 5, 8]
+    first-used inputs: {} ; working prefix: 15
+    copies in active-logical order: [[12, 13, 14], [0, 1, 2], [3, 4, 5], [6, 7, 8], [9, 10, 11]]
+    protected spectators (logical -> physical): {}
+  G15: hea_rzz_B3_A [selected depth 3/3], active=[0, 1], directions={0: 'down', 1: 'down'}, corrected outputs=[6, 7, 11], reset=[9, 0, 10, 1, 2, 4, 3, 5]
+    first-used inputs: {} ; working prefix: 15
+    copies in active-logical order: [[9, 10], [0, 1], [2, 3], [4, 5], [6, 7]]
+    protected spectators (logical -> physical): {2: 11}
+  G16: hea_rzz_B3_B [selected depth 3/3], active=[1, 2], directions={1: 'down', 2: 'down'}, corrected outputs=[6, 8, 9], reset=[7, 0, 11, 1, 2, 4, 3, 5]
+    first-used inputs: {} ; working prefix: 15
+    copies in active-logical order: [[7, 11], [0, 1], [2, 3], [4, 5], [8, 9]]
+    protected spectators (logical -> physical): {0: 6}
+Logical qubits: 3; physical qubits: 21; fold factor: 7
+Reusable pool; assignment=dynamic; routing=cycle; input placement=first_use
+Initial input map (logical -> physical): {0: 0, 1: 1, 2: 2}
+First use of each input (1-based G index, None = never): [1, 1, 1]
+Bell links: 120; possible full Bell histories: 1766847064778384329583297500742918515827483896875618958121606201292619776
+Output map (logical -> physical): {0: 10, 1: 12, 2: 13}
+  G1: hea_rzz_B0_RY [selected depth 1/1], active=[0, 1, 2], directions={0: 'down', 1: 'down', 2: 'down'}, corrected outputs=[18, 19, 20], reset=[0, 3, 1, 4, 2, 5, 6, 9, 7, 10, 8, 11, 12, 15, 13, 16, 14, 17]
+    first-used inputs: {0: 0, 1: 1, 2: 2} ; working prefix: 21
+    copies in active-logical order: [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9, 10, 11], [12, 13, 14], [15, 16, 17], [18, 19, 20]]
+    protected spectators (logical -> physical): {}
+  G2: hea_rzz_B0_RZ [selected depth 1/1], active=[0, 1, 2], directions={0: 'down', 1: 'down', 2: 'down'}, corrected outputs=[15, 16, 17], reset=[18, 0, 19, 1, 20, 2, 3, 6, 4, 7, 5, 8, 9, 12, 10, 13, 11, 14]
+    first-used inputs: {} ; working prefix: 21
+    copies in active-logical order: [[18, 19, 20], [0, 1, 2], [3, 4, 5], [6, 7, 8], [9, 10, 11], [12, 13, 14], [15, 16, 17]]
+    protected spectators (logical -> physical): {}
+  G3: hea_rzz_B0_A [selected depth 3/3], active=[0, 1], directions={0: 'down', 1: 'down'}, corrected outputs=[10, 11, 17], reset=[15, 0, 16, 1, 2, 4, 3, 5, 6, 8, 7, 9]
+    first-used inputs: {} ; working prefix: 21
+    copies in active-logical order: [[15, 16], [0, 1], [2, 3], [4, 5], [6, 7], [8, 9], [10, 11]]
+    protected spectators (logical -> physical): {2: 17}
+  G4: hea_rzz_B0_B [selected depth 3/3], active=[1, 2], directions={1: 'down', 2: 'down'}, corrected outputs=[10, 12, 13], reset=[11, 0, 17, 1, 2, 4, 3, 5, 6, 8, 7, 9]
+    first-used inputs: {} ; working prefix: 21
+    copies in active-logical order: [[11, 17], [0, 1], [2, 3], [4, 5], [6, 7], [8, 9], [12, 13]]
+    protected spectators (logical -> physical): {0: 10}
+  G5: hea_rzz_B1_RY [selected depth 1/1], active=[0, 1, 2], directions={0: 'down', 1: 'down', 2: 'down'}, corrected outputs=[18, 19, 20], reset=[10, 0, 12, 1, 13, 2, 3, 6, 4, 7, 5, 8, 9, 15, 11, 16, 14, 17]
+    first-used inputs: {} ; working prefix: 21
+    copies in active-logical order: [[10, 12, 13], [0, 1, 2], [3, 4, 5], [6, 7, 8], [9, 11, 14], [15, 16, 17], [18, 19, 20]]
+    protected spectators (logical -> physical): {}
+  G6: hea_rzz_B1_RZ [selected depth 1/1], active=[0, 1, 2], directions={0: 'down', 1: 'down', 2: 'down'}, corrected outputs=[15, 16, 17], reset=[18, 0, 19, 1, 20, 2, 3, 6, 4, 7, 5, 8, 9, 12, 10, 13, 11, 14]
+    first-used inputs: {} ; working prefix: 21
+    copies in active-logical order: [[18, 19, 20], [0, 1, 2], [3, 4, 5], [6, 7, 8], [9, 10, 11], [12, 13, 14], [15, 16, 17]]
+    protected spectators (logical -> physical): {}
+  G7: hea_rzz_B1_A [selected depth 3/3], active=[0, 1], directions={0: 'down', 1: 'down'}, corrected outputs=[10, 11, 17], reset=[15, 0, 16, 1, 2, 4, 3, 5, 6, 8, 7, 9]
+    first-used inputs: {} ; working prefix: 21
+    copies in active-logical order: [[15, 16], [0, 1], [2, 3], [4, 5], [6, 7], [8, 9], [10, 11]]
+    protected spectators (logical -> physical): {2: 17}
+  G8: hea_rzz_B1_B [selected depth 3/3], active=[1, 2], directions={1: 'down', 2: 'down'}, corrected outputs=[10, 12, 13], reset=[11, 0, 17, 1, 2, 4, 3, 5, 6, 8, 7, 9]
+    first-used inputs: {} ; working prefix: 21
+    copies in active-logical order: [[11, 17], [0, 1], [2, 3], [4, 5], [6, 7], [8, 9], [12, 13]]
+    protected spectators (logical -> physical): {0: 10}
+  G9: hea_rzz_B2_RY [selected depth 1/1], active=[0, 1, 2], directions={0: 'down', 1: 'down', 2: 'down'}, corrected outputs=[18, 19, 20], reset=[10, 0, 12, 1, 13, 2, 3, 6, 4, 7, 5, 8, 9, 15, 11, 16, 14, 17]
+    first-used inputs: {} ; working prefix: 21
+    copies in active-logical order: [[10, 12, 13], [0, 1, 2], [3, 4, 5], [6, 7, 8], [9, 11, 14], [15, 16, 17], [18, 19, 20]]
+    protected spectators (logical -> physical): {}
+  G10: hea_rzz_B2_RZ [selected depth 1/1], active=[0, 1, 2], directions={0: 'down', 1: 'down', 2: 'down'}, corrected outputs=[15, 16, 17], reset=[18, 0, 19, 1, 20, 2, 3, 6, 4, 7, 5, 8, 9, 12, 10, 13, 11, 14]
+    first-used inputs: {} ; working prefix: 21
+    copies in active-logical order: [[18, 19, 20], [0, 1, 2], [3, 4, 5], [6, 7, 8], [9, 10, 11], [12, 13, 14], [15, 16, 17]]
+    protected spectators (logical -> physical): {}
+  G11: hea_rzz_B2_A [selected depth 3/3], active=[0, 1], directions={0: 'down', 1: 'down'}, corrected outputs=[10, 11, 17], reset=[15, 0, 16, 1, 2, 4, 3, 5, 6, 8, 7, 9]
+    first-used inputs: {} ; working prefix: 21
+    copies in active-logical order: [[15, 16], [0, 1], [2, 3], [4, 5], [6, 7], [8, 9], [10, 11]]
+    protected spectators (logical -> physical): {2: 17}
+  G12: hea_rzz_B2_B [selected depth 3/3], active=[1, 2], directions={1: 'down', 2: 'down'}, corrected outputs=[10, 12, 13], reset=[11, 0, 17, 1, 2, 4, 3, 5, 6, 8, 7, 9]
+    first-used inputs: {} ; working prefix: 21
+    copies in active-logical order: [[11, 17], [0, 1], [2, 3], [4, 5], [6, 7], [8, 9], [12, 13]]
+    protected spectators (logical -> physical): {0: 10}
+  G13: hea_rzz_B3_RY [selected depth 1/1], active=[0, 1, 2], directions={0: 'down', 1: 'down', 2: 'down'}, corrected outputs=[18, 19, 20], reset=[10, 0, 12, 1, 13, 2, 3, 6, 4, 7, 5, 8, 9, 15, 11, 16, 14, 17]
+    first-used inputs: {} ; working prefix: 21
+    copies in active-logical order: [[10, 12, 13], [0, 1, 2], [3, 4, 5], [6, 7, 8], [9, 11, 14], [15, 16, 17], [18, 19, 20]]
+    protected spectators (logical -> physical): {}
+  G14: hea_rzz_B3_RZ [selected depth 1/1], active=[0, 1, 2], directions={0: 'down', 1: 'down', 2: 'down'}, corrected outputs=[15, 16, 17], reset=[18, 0, 19, 1, 20, 2, 3, 6, 4, 7, 5, 8, 9, 12, 10, 13, 11, 14]
+    first-used inputs: {} ; working prefix: 21
+    copies in active-logical order: [[18, 19, 20], [0, 1, 2], [3, 4, 5], [6, 7, 8], [9, 10, 11], [12, 13, 14], [15, 16, 17]]
+    protected spectators (logical -> physical): {}
+  G15: hea_rzz_B3_A [selected depth 3/3], active=[0, 1], directions={0: 'down', 1: 'down'}, corrected outputs=[10, 11, 17], reset=[15, 0, 16, 1, 2, 4, 3, 5, 6, 8, 7, 9]
+    first-used inputs: {} ; working prefix: 21
+    copies in active-logical order: [[15, 16], [0, 1], [2, 3], [4, 5], [6, 7], [8, 9], [10, 11]]
+    protected spectators (logical -> physical): {2: 17}
+  G16: hea_rzz_B3_B [selected depth 3/3], active=[1, 2], directions={1: 'down', 2: 'down'}, corrected outputs=[10, 12, 13], reset=[11, 0, 17, 1, 2, 4, 3, 5, 6, 8, 7, 9]
+    first-used inputs: {} ; working prefix: 21
+    copies in active-logical order: [[11, 17], [0, 1], [2, 3], [4, 5], [6, 7], [8, 9], [12, 13]]
+    protected spectators (logical -> physical): {0: 10}
+
+UNITARY_TYPE = hea_rzz
+type=hea_rzz, qubits=3, selected depth=32/128, local components=16
+DEPTH = 32; maximum configured depth = 128
+Machine: GPU
+Backend: AerSimulator
+Noise: depth-dependent random Pauli
+
+Expectation values of local method:
+[0.3480, 0.1480, 0.0500, -0.0160]
+
+Gate-count-axis extrapolation to N = 0
+
+before_weighted: N = 0.3*N_1q + 0.7*N_2q
+N = [24, 236.8, 449.6, 662.4]
+linear: 0.3244 at N=0 (RMSE=3.440e-02)
+exponential: 0.3926 at N=0 (RMSE=1.914e-02)
+
+before_two_qubit: N = N_2q
+N = [18, 130, 242, 354]
+linear: 0.3301 at N=0 (RMSE=3.440e-02)
+exponential: 0.4114 at N=0 (RMSE=1.914e-02)
+
+after_weighted: N = 0.3*N_1q + 0.7*N_2q
+N = [24, 236.8, 449.6, 662.4]
+linear: 0.3244 at N=0 (RMSE=3.440e-02)
+exponential: 0.3926 at N=0 (RMSE=1.914e-02)
+
+after_two_qubit: N = N_2q
+N = [18, 130, 242, 354]
+linear: 0.3301 at N=0 (RMSE=3.440e-02)
+exponential: 0.4114 at N=0 (RMSE=1.914e-02)
+
+Report saved to: /home/quantum/GIT_projects/ZNE_depth_reduced/zne_reports/3q_hea_rzz_32_GPU_increasing_pauli_local.json
