@@ -780,7 +780,7 @@ def main() -> int:
         + ("disabled" if timeout_seconds is None else _format_duration(timeout_seconds))
     )
     print(
-        "Order guarantee : smoke -> ALL normal-Aer round 1 -> round 2 -> "
+        "Order guarantee : ALL normal-Aer round 1 -> round 2 -> "
         "round 3 -> round 4/5 -> ALL FakeQuebec rounds"
     )
     print("=" * 88)

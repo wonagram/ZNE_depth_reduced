@@ -195,7 +195,14 @@ depth_folded_circuits = list(override(
 )
 
 # Historical constant-noise strengths (same semantics as before).
-depolarizing_strength = 0.02
+# Dedicated small-constant-DP mode: 0.2% = 0.002.
+# Original constant depolarizing remains 2% = 0.02.
+SMALL_CONSTANT_DEPOLARIZING_STRENGTH = 0.002
+depolarizing_strength = (
+    SMALL_CONSTANT_DEPOLARIZING_STRENGTH
+    if _CLI_ARGS.noise == "small_constant_depolarizing"
+    else 0.02
+)
 amplitude_damping_strength = 0.02
 phase_damping_strength = 0.02
 overrotation_epsilon = 0.02
@@ -749,6 +756,9 @@ def _noise_filename_tag():
         return None
     if USE_REAL_HARDWARE:
         return None
+
+    if _CLI_ARGS.noise == "small_constant_depolarizing":
+        return "small_constant_depolarizing_0p2pct"
 
     if USE_INCREASING_RANDOM_PAULI and USE_INCREASING_AMPLITUDE_DAMPING:
         return "increasing_pauli_amplitude_damping"
