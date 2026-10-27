@@ -1,0 +1,38 @@
+COMMAND: /home/quantum/GIT_projects/ZNE_depth_reduced/.venv/bin/python /home/quantum/GIT_projects/ZNE_depth_reduced/ZNE_circuit_folding.py --machine gpu --backend aer_simulator --noise increasing_random_pauli_amplitude_damping --num-qubits 4 --unitary random_type --depth 32 --report-directory /home/quantum/GIT_projects/ZNE_depth_reduced/zne_reports --shots 1000 --base-seed 150 --gate-weight-1q 0.3 --gate-weight-2q 0.7 --fold-factors 1 3 5 7
+
+
+UNITARY_TYPE = random_type
+type=random_type, qubits=4, selected depth=32/128, local components=32
+DEPTH = 32; maximum configured depth = 128
+One-pass U compilation removed pairs: H=0, inverse RX(pi/2)=0
+Machine: GPU
+Backend: AerSimulator
+Noise: depth-dependent random Pauli, depth-dependent amplitude damping
+
+Expectation values of circuit_folded method:
+[-0.0300, 0.0080, 0.0060, 0.0080]
+Ideal statevector expectation: 0.022897355238
+
+Gate-count-axis extrapolation to N = 0
+
+before_weighted: N = 0.3*N_1q + 0.7*N_2q
+N = [40.5, 112.5, 184.5, 256.5]
+linear: -0.0251 at N=0 (RMSE=1.026e-02)
+exponential: -16.5953 at N=0 (RMSE=6.403e-03)
+
+before_two_qubit: N = N_2q
+N = [27, 75, 123, 171]
+linear: -0.0251 at N=0 (RMSE=1.026e-02)
+exponential: -16.5934 at N=0 (RMSE=6.403e-03)
+
+after_weighted: N = 0.3*N_1q + 0.7*N_2q
+N = [40.5, 112.5, 184.5, 256.5]
+linear: -0.0251 at N=0 (RMSE=1.026e-02)
+exponential: -16.5953 at N=0 (RMSE=6.403e-03)
+
+after_two_qubit: N = N_2q
+N = [27, 75, 123, 171]
+linear: -0.0251 at N=0 (RMSE=1.026e-02)
+exponential: -16.5934 at N=0 (RMSE=6.403e-03)
+
+Report saved to: /home/quantum/GIT_projects/ZNE_depth_reduced/zne_reports/4q_random_type_32_GPU_increasing_pauli_amplitude_damping_circuit_folding.json

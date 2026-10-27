@@ -1,0 +1,38 @@
+COMMAND: /home/quantum/GIT_projects/ZNE_depth_reduced/.venv/bin/python /home/quantum/GIT_projects/ZNE_depth_reduced/ZNE_circuit_folding.py --machine gpu --backend aer_simulator --noise constant_depolarizing --num-qubits 2 --unitary hea_crz --depth 30 --report-directory /home/quantum/GIT_projects/ZNE_depth_reduced/zne_reports --shots 1000 --base-seed 150 --gate-weight-1q 0.3 --gate-weight-2q 0.7 --fold-factors 1 3 5 7
+
+
+UNITARY_TYPE = hea_crz
+type=hea_crz, qubits=2, selected depth=30/144, local components=15
+DEPTH = 30; maximum configured depth = 144
+One-pass U compilation removed pairs: H=0, inverse RX(pi/2)=0
+Machine: GPU
+Backend: AerSimulator
+Noise: constant depolarizing
+
+Expectation values of circuit_folded method:
+[0.2900, 0.0600, 0.0120, 0.0200]
+Ideal statevector expectation: 0.645341687114
+
+Gate-count-axis extrapolation to N = 0
+
+before_weighted: N = 0.3*N_1q + 0.7*N_2q
+N = [17.9, 49.9, 81.9, 113.9]
+linear: 0.2722 at N=0 (RMSE=6.114e-02)
+exponential: 0.6873 at N=0 (RMSE=8.662e-03)
+
+before_two_qubit: N = N_2q
+N = [11, 31, 51, 71]
+linear: 0.2714 at N=0 (RMSE=6.114e-02)
+exponential: 0.6775 at N=0 (RMSE=8.662e-03)
+
+after_weighted: N = 0.3*N_1q + 0.7*N_2q
+N = [17.9, 49.9, 81.9, 113.9]
+linear: 0.2722 at N=0 (RMSE=6.114e-02)
+exponential: 0.6873 at N=0 (RMSE=8.662e-03)
+
+after_two_qubit: N = N_2q
+N = [11, 31, 51, 71]
+linear: 0.2714 at N=0 (RMSE=6.114e-02)
+exponential: 0.6775 at N=0 (RMSE=8.662e-03)
+
+Report saved to: /home/quantum/GIT_projects/ZNE_depth_reduced/zne_reports/2q_hea_crz_30_GPU_constant_depolarizing_circuit_folding.json

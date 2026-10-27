@@ -1,0 +1,37 @@
+COMMAND: /home/quantum/GIT_projects/ZNE_depth_reduced/.venv/bin/python /home/quantum/GIT_projects/ZNE_depth_reduced/ZNE_depth_reduced_global.py --machine gpu --backend aer_simulator --noise constant_depolarizing --num-qubits 5 --unitary random_type --depth 32 --report-directory /home/quantum/GIT_projects/ZNE_depth_reduced/zne_reports --shots 1000 --base-seed 150 --gate-weight-1q 0.3 --gate-weight-2q 0.7 --fold-factors 1 3 5
+
+
+UNITARY_TYPE = random_type
+type=random_type, qubits=5, selected depth=32/128, local components=32
+DEPTH = 32; maximum configured depth = 128
+One-pass U compilation removed pairs: Y=72, H=0, inverse RX(pi/2)=0
+Machine: GPU
+Backend: AerSimulator
+Noise: constant depolarizing
+
+Expectation values of global method:
+[-0.0960, -0.0140, -0.0360]
+
+Gate-count-axis extrapolation to N = 0
+
+before_weighted: N = 0.3*N_1q + 0.7*N_2q
+N = [52.2, 188, 323.8]
+linear: -0.0902 at N=0 (RMSE=2.451e-02)
+exponential: -0.1420 at N=0 (RMSE=1.786e-02)
+
+before_two_qubit: N = N_2q
+N = [36, 110, 184]
+linear: -0.0933 at N=0 (RMSE=2.451e-02)
+exponential: -0.1588 at N=0 (RMSE=1.786e-02)
+
+after_weighted: N = 0.3*N_1q + 0.7*N_2q
+N = [52.2, 188, 323.8]
+linear: -0.0902 at N=0 (RMSE=2.451e-02)
+exponential: -0.1420 at N=0 (RMSE=1.786e-02)
+
+after_two_qubit: N = N_2q
+N = [36, 110, 184]
+linear: -0.0933 at N=0 (RMSE=2.451e-02)
+exponential: -0.1588 at N=0 (RMSE=1.786e-02)
+
+Report saved to: /home/quantum/GIT_projects/ZNE_depth_reduced/zne_reports/5q_random_type_32_GPU_constant_depolarizing_global.json

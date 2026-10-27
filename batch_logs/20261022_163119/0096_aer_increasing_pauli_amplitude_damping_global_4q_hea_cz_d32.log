@@ -1,0 +1,4 @@
+COMMAND: /home/quantum/GIT_projects/ZNE_depth_reduced/.venv/bin/python /home/quantum/GIT_projects/ZNE_depth_reduced/ZNE_depth_reduced_global.py --machine gpu --backend aer_simulator --noise increasing_random_pauli_amplitude_damping --num-qubits 4 --unitary hea_cz --depth 32 --report-directory /home/quantum/GIT_projects/ZNE_depth_reduced/zne_reports --shots 1000 --base-seed 150 --gate-weight-1q 0.3 --gate-weight-2q 0.7 --fold-factors 1 3 5 7
+
+
+BATCH TIMEOUT: exceeded 14400 seconds; terminating process group.

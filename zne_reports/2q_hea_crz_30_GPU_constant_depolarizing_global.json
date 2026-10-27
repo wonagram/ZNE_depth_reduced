@@ -1,0 +1,216 @@
+{
+  "schema_version": 4,
+  "method": "global",
+  "num_qubits": 2,
+  "unitary_type": "hea_crz",
+  "depth": 30,
+  "fold_factors": [
+    1,
+    3,
+    5,
+    7
+  ],
+  "expectation_values": [
+    0.2899999999999999,
+    0.07599999999999996,
+    0.028000000000000025,
+    0.0020000000000000018
+  ],
+  "ideal_expectation": null,
+  "backend_mode": "aer_artificial_noise",
+  "execution": {
+    "machine": "GPU",
+    "simulation_device": "GPU",
+    "gpu_enabled": true,
+    "backend_kind": "aer_simulator",
+    "backend_mode": "aer_artificial_noise",
+    "backend_name": "AerSimulator",
+    "filename_tag": "GPU_constant_depolarizing",
+    "noise_filename_tag": "constant_depolarizing",
+    "shots": 1000,
+    "simulation_method": "automatic",
+    "noisy_statevector_trajectories": false,
+    "shot_branching_enable": false
+  },
+  "noise": {
+    "source": "constant_artificial_noise_channels",
+    "selected_custom_noise_family": "constant",
+    "custom_noise_channels_applied": true,
+    "active_custom_noise_types": [
+      "constant_depolarizing"
+    ],
+    "active_constant_noise_types": [
+      "constant_depolarizing"
+    ],
+    "active_depth_dependent_noise_types": [],
+    "constant_noise_parameters": {
+      "depolarizing_strength": 0.02,
+      "amplitude_damping_strength": 0.02,
+      "phase_damping_strength": 0.02,
+      "coherent_overrotation_epsilon": 0.02
+    },
+    "custom_noise_parameters": {
+      "depolarizing_strength": 0.02,
+      "amplitude_damping_strength": 0.02,
+      "phase_damping_strength": 0.02,
+      "coherent_overrotation_epsilon": 0.02
+    },
+    "depth_dependent_noise_configuration": null,
+    "fake_backend_name": null,
+    "fake_statevector_trajectory_sampling": false,
+    "shot_branching_enable": false
+  },
+  "weights": {
+    "w1_one_qubit": 0.3,
+    "w2_two_qubit": 0.7
+  },
+  "gate_count_definition": "Structural gate count. Measurements, resets, barriers, delays, Aer save/set instructions, and explicit artificial-noise-channel instructions are excluded. Control-flow blocks are counted recursively.",
+  "gate_counts": {
+    "before_transpilation": {
+      "N_1q": [
+        34,
+        140,
+        246,
+        352
+      ],
+      "N_2q": [
+        11,
+        35,
+        59,
+        83
+      ],
+      "N_weighted": [
+        17.9,
+        66.5,
+        115.1,
+        163.7
+      ]
+    },
+    "after_transpilation": {
+      "N_1q": [
+        34,
+        140,
+        246,
+        352
+      ],
+      "N_2q": [
+        11,
+        35,
+        59,
+        83
+      ],
+      "N_weighted": [
+        17.9,
+        66.5,
+        115.1,
+        163.7
+      ]
+    }
+  },
+  "cases": {
+    "before_weighted": {
+      "case": "before_transpilation_weighted",
+      "N_definition": "N = 0.3*N_1q + 0.7*N_2q",
+      "N": [
+        17.9,
+        66.5,
+        115.1,
+        163.7
+      ],
+      "linear": {
+        "success": true,
+        "model": "a*N + b",
+        "slope": -0.0018765432098765426,
+        "intercept": 0.26939012345679,
+        "at_N_zero": 0.26939012345679,
+        "rmse": 0.04968098227692363
+      },
+      "exponential": {
+        "success": true,
+        "model": "A*exp(-g*N)",
+        "amplitude": 0.46800809597293525,
+        "decay_rate": 0.026802074545869244,
+        "at_N_zero": 0.46800809597293525,
+        "rmse": 0.004052972726626141
+      }
+    },
+    "before_two_qubit": {
+      "case": "before_transpilation_two_qubit",
+      "N_definition": "N = N_2q",
+      "N": [
+        11.0,
+        35.0,
+        59.0,
+        83.0
+      ],
+      "linear": {
+        "success": true,
+        "model": "a*N + b",
+        "slope": -0.003799999999999999,
+        "intercept": 0.2775999999999998,
+        "at_N_zero": 0.2775999999999998,
+        "rmse": 0.049680982276923615
+      },
+      "exponential": {
+        "success": true,
+        "model": "A*exp(-g*N)",
+        "amplitude": 0.5262332709425144,
+        "decay_rate": 0.05427419509430201,
+        "at_N_zero": 0.5262332709425144,
+        "rmse": 0.0040529727266305614
+      }
+    },
+    "after_weighted": {
+      "case": "after_transpilation_weighted",
+      "N_definition": "N = 0.3*N_1q + 0.7*N_2q",
+      "N": [
+        17.9,
+        66.5,
+        115.1,
+        163.7
+      ],
+      "linear": {
+        "success": true,
+        "model": "a*N + b",
+        "slope": -0.0018765432098765426,
+        "intercept": 0.26939012345679,
+        "at_N_zero": 0.26939012345679,
+        "rmse": 0.04968098227692363
+      },
+      "exponential": {
+        "success": true,
+        "model": "A*exp(-g*N)",
+        "amplitude": 0.46800809597293525,
+        "decay_rate": 0.026802074545869244,
+        "at_N_zero": 0.46800809597293525,
+        "rmse": 0.004052972726626141
+      }
+    },
+    "after_two_qubit": {
+      "case": "after_transpilation_two_qubit",
+      "N_definition": "N = N_2q",
+      "N": [
+        11.0,
+        35.0,
+        59.0,
+        83.0
+      ],
+      "linear": {
+        "success": true,
+        "model": "a*N + b",
+        "slope": -0.003799999999999999,
+        "intercept": 0.2775999999999998,
+        "at_N_zero": 0.2775999999999998,
+        "rmse": 0.049680982276923615
+      },
+      "exponential": {
+        "success": true,
+        "model": "A*exp(-g*N)",
+        "amplitude": 0.5262332709425144,
+        "decay_rate": 0.05427419509430201,
+        "at_N_zero": 0.5262332709425144,
+        "rmse": 0.0040529727266305614
+      }
+    }
+  }
+}
