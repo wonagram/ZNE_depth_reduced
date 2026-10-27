@@ -31,7 +31,7 @@ STOP_ON_FAILURE = False
 # Prevent one unexpectedly expensive simulation from blocking every later job.
 # A timed-out child process is terminated, recorded as FAILED/TIMEOUT, and the
 # batch continues. Set to 0 or None to disable the timeout.
-JOB_TIMEOUT_SECONDS = 4 * 60 * 60  # 4 hours per job
+JOB_TIMEOUT_SECONDS = 12 * 60 * 60  # 4 hours per job
 
 # Select the visible NVIDIA GPU(s). "0" means the first GPU.
 CUDA_VISIBLE_DEVICES = "0"
@@ -159,18 +159,6 @@ EXECUTION_PROFILES = {
 # random_type joins each round by ordinal position because its depths differ.
 # ============================================================
 EXPERIMENTS = [
-    # This tests circuit folding, global, and local dynamic execution with the
-    # new FakeQuebec statevector-trajectory backend before the overnight jobs.
-    {
-        "name": "fake_quebec_statevector_smoke_test",
-        "unitary": "hea_cz",
-        "profiles": ["fake_quebec_statevector_smoke"],
-        "methods": "all",
-        "depths_by_num_qubits": {
-            2: [30],
-        },
-    },
-
     {
         "name": "hea_cz_complete_repeats",
         "unitary": "hea_cz",
