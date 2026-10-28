@@ -22,7 +22,6 @@ BACKEND_CHOICES = (
 NOISE_CHOICES = (
     "none",
     "constant_depolarizing",
-    "small_constant_depolarizing",
     "constant_amplitude_damping",
     "constant_phase_damping",
     "constant_coherent_overrotation",
@@ -37,6 +36,7 @@ class CliArguments:
     machine: Optional[str]
     backend: Optional[str]
     noise: Optional[str]
+    depolarizing_strength: Optional[float]
     num_qubits: Optional[int]
     unitary: Optional[str]
     depth: Optional[int]
@@ -81,6 +81,11 @@ def parse_cli_args(description: str) -> CliArguments:
             "ideal statevector require 'none'."
         ),
     )
+    parser.add_argument(
+        "--depolarizing-strength",
+        type=float,
+        help="Constant depolarizing probability, e.g. 0.002 for 0.2%.",
+    )
     parser.add_argument("--num-qubits", type=int)
     parser.add_argument("--unitary", type=str)
     parser.add_argument("--depth", type=int)
@@ -121,11 +126,15 @@ def parse_cli_args(description: str) -> CliArguments:
     if (namespace.max_simulator_physical_qubits is not None
             and namespace.max_simulator_physical_qubits < 1):
         parser.error("--max-simulator-physical-qubits must be positive.")
+    if namespace.depolarizing_strength is not None:
+        if not (0.0 <= namespace.depolarizing_strength <= 1.0):
+            parser.error("--depolarizing-strength must be between 0 and 1.")
 
     return CliArguments(
         machine=namespace.machine,
         backend=namespace.backend,
         noise=namespace.noise,
+        depolarizing_strength=namespace.depolarizing_strength,
         num_qubits=namespace.num_qubits,
         unitary=namespace.unitary,
         depth=namespace.depth,
@@ -213,7 +222,7 @@ def resolve_noise_flags(
         "increasing_random_pauli": False,
         "increasing_amplitude_damping": False,
     }
-    if selected in {"constant_depolarizing", "small_constant_depolarizing"}:
+    if selected == "constant_depolarizing":
         flags["constant_depolarizing"] = True
     elif selected == "constant_amplitude_damping":
         flags["constant_amplitude_damping"] = True

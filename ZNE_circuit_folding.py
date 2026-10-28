@@ -22,7 +22,6 @@ from unitary_tools import (
     append_unitary_block,
     configure_aer_simulator_device,
     make_fake_aer_backend,
-    make_fake_statevector_aer_backend,
 )
 from state_preparation import *
 
@@ -58,19 +57,13 @@ REAL_HARDWARE_DEVICE_NAME = override(
 # Simulation backend
 # ============================================================
 # These flags apply only when USE_REAL_HARDWARE=False.
-# Select exactly one of the four simulation backends.
-(
-    USE_AER_SIMULATOR,
-    USE_STATEVECTOR,
-    USE_FAKE_BACKEND,
-    USE_FAKE_STATEVECTOR,
-) = resolve_backend_flags(
+# Select exactly one of the three simulation backends.
+USE_AER_SIMULATOR, USE_STATEVECTOR, USE_FAKE_BACKEND = resolve_backend_flags(
     _CLI_ARGS.backend,
     use_real_hardware=USE_REAL_HARDWARE,
     default_use_aer_simulator=True,
     default_use_statevector=False,
     default_use_fake_backend=False,
-    default_use_fake_statevector=False,
 )
 
 # Fake-backend mode uses an IBM fake-device snapshot to configure Aer.
@@ -90,7 +83,6 @@ _SIMULATION_BACKEND_FLAGS = {
     "USE_AER_SIMULATOR": USE_AER_SIMULATOR,
     "USE_STATEVECTOR": USE_STATEVECTOR,
     "USE_FAKE_BACKEND": USE_FAKE_BACKEND,
-    "USE_FAKE_STATEVECTOR": USE_FAKE_STATEVECTOR,
 }
 _ENABLED_SIMULATION_BACKENDS = [
     name for name, enabled in _SIMULATION_BACKEND_FLAGS.items() if enabled
@@ -105,7 +97,7 @@ if USE_REAL_HARDWARE:
     if _ENABLED_SIMULATION_BACKENDS:
         raise ValueError(
             "When USE_REAL_HARDWARE=True, turn off USE_AER_SIMULATOR, "
-            "USE_STATEVECTOR, USE_FAKE_BACKEND, and USE_FAKE_STATEVECTOR. Enabled simulation backends: "
+            "USE_STATEVECTOR, and USE_FAKE_BACKEND. Enabled simulation backends: "
             + ", ".join(_ENABLED_SIMULATION_BACKENDS)
         )
     SIMULATION_DEVICE = None
@@ -113,7 +105,7 @@ else:
     if len(_ENABLED_SIMULATION_BACKENDS) != 1:
         raise ValueError(
             "When USE_REAL_HARDWARE=False, select exactly one simulation backend: "
-            "USE_AER_SIMULATOR, USE_STATEVECTOR, USE_FAKE_BACKEND, or USE_FAKE_STATEVECTOR. Enabled: "
+            "USE_AER_SIMULATOR, USE_STATEVECTOR, or USE_FAKE_BACKEND. Enabled: "
             + (", ".join(_ENABLED_SIMULATION_BACKENDS)
                if _ENABLED_SIMULATION_BACKENDS else "none")
         )
@@ -194,14 +186,7 @@ depth_folded_circuits = list(override(
 )
 
 # Historical constant-noise strengths (same semantics as before).
-# Dedicated small-constant-DP mode: 0.2% = 0.002.
-# Original constant depolarizing remains 2% = 0.02.
-SMALL_CONSTANT_DEPOLARIZING_STRENGTH = 0.002
-depolarizing_strength = (
-    SMALL_CONSTANT_DEPOLARIZING_STRENGTH
-    if _CLI_ARGS.noise == "small_constant_depolarizing"
-    else 0.02
-)
+depolarizing_strength = float(override(0.02, _CLI_ARGS.depolarizing_strength))
 amplitude_damping_strength = 0.02
 phase_damping_strength = 0.02
 overrotation_epsilon = 0.02
@@ -597,8 +582,6 @@ def _backend_mode_name():
         return f"real_hardware:{_real_hardware_backend_name()}"
     if USE_STATEVECTOR:
         return "statevector_noiseless"
-    if USE_FAKE_STATEVECTOR:
-        return f"fake_backend_statevector_trajectories:{FAKE_BACKEND_NAME}"
     if USE_FAKE_BACKEND:
         return f"fake_backend:{FAKE_BACKEND_NAME}"
     if _INCREASING_NOISE_ACTIVE:
@@ -613,8 +596,6 @@ def _backend_kind_for_report():
         return "real_hardware"
     if USE_STATEVECTOR:
         return "statevector"
-    if USE_FAKE_STATEVECTOR:
-        return "fake_statevector"
     if USE_FAKE_BACKEND:
         return "fake_backend"
     return "aer_simulator"
@@ -625,8 +606,6 @@ def _backend_name_for_report():
         return _real_hardware_backend_name()
     if USE_STATEVECTOR:
         return "AerSimulator(statevector)"
-    if USE_FAKE_STATEVECTOR:
-        return f"{FAKE_BACKEND_NAME}(statevector trajectories)"
     if USE_FAKE_BACKEND:
         return str(FAKE_BACKEND_NAME)
     return "AerSimulator"
@@ -638,15 +617,12 @@ def _machine_name_for_report():
 
 def _noise_filename_tag():
     """Compact noise label used to prevent report-file overwrites."""
-    if USE_FAKE_BACKEND or USE_FAKE_STATEVECTOR:
+    if USE_FAKE_BACKEND:
         return None
     if USE_STATEVECTOR:
         return None
     if USE_REAL_HARDWARE:
         return None
-
-    if _CLI_ARGS.noise == "small_constant_depolarizing":
-        return "small_constant_depolarizing_0p2pct"
 
     if USE_INCREASING_RANDOM_PAULI and USE_INCREASING_AMPLITUDE_DAMPING:
         return "increasing_pauli_amplitude_damping"
@@ -654,6 +630,17 @@ def _noise_filename_tag():
         return "increasing_pauli"
     if USE_INCREASING_AMPLITUDE_DAMPING:
         return "increasing_amplitude_damping"
+
+    # Preserve the historical 0.2% report naming so existing reports are
+    # recognized and skipped by the batch runner.
+    if (
+        USE_CONSTANT_DEPOLARIZING
+        and not USE_CONSTANT_AMPLITUDE_DAMPING
+        and not USE_CONSTANT_PHASE_DAMPING
+        and not USE_CONSTANT_COHERENT_OVERROTATION
+        and abs(depolarizing_strength - 0.002) < 1e-12
+    ):
+        return "small_constant_depolarizing_0p2pct"
 
     constant = []
     if USE_CONSTANT_DEPOLARIZING:
@@ -676,9 +663,6 @@ def _execution_filename_tag():
 
     parts = [str(SIMULATION_DEVICE)]
     if USE_STATEVECTOR:
-        parts.append("statevector")
-    elif USE_FAKE_STATEVECTOR:
-        parts.append(_safe_filename_tag(FAKE_BACKEND_NAME))
         parts.append("statevector")
     elif USE_FAKE_BACKEND:
         parts.append(_safe_filename_tag(FAKE_BACKEND_NAME))
@@ -706,9 +690,7 @@ def _noise_report():
 
     active_custom_types = active_constant_types + active_increasing_types
 
-    if USE_FAKE_STATEVECTOR:
-        source = "fake_backend_device_snapshot_statevector_trajectories"
-    elif USE_FAKE_BACKEND:
+    if USE_FAKE_BACKEND:
         source = "fake_backend_device_snapshot"
     elif USE_REAL_HARDWARE:
         source = "real_hardware_device_noise"
@@ -749,13 +731,7 @@ def _noise_report():
         "depth_dependent_noise_configuration": (
             NOISE_CONTROLLER.runtime_report() if _INCREASING_NOISE_ACTIVE else None
         ),
-        "fake_backend_name": (
-            str(FAKE_BACKEND_NAME)
-            if (USE_FAKE_BACKEND or USE_FAKE_STATEVECTOR)
-            else None
-        ),
-        "fake_statevector_trajectory_sampling": bool(USE_FAKE_STATEVECTOR),
-        "shot_branching_enable": bool(USE_FAKE_STATEVECTOR),
+        "fake_backend_name": str(FAKE_BACKEND_NAME) if USE_FAKE_BACKEND else None,
     }
 
 
@@ -791,13 +767,6 @@ def _write_report(method_name, expectations, raw_counts, transpiled_counts,
             "filename_tag": _execution_filename_tag(),
             "noise_filename_tag": _noise_filename_tag(),
             "shots": None if USE_STATEVECTOR else int(shots),
-            "simulation_method": (
-                "statevector"
-                if (USE_STATEVECTOR or USE_FAKE_STATEVECTOR)
-                else "automatic"
-            ),
-            "noisy_statevector_trajectories": bool(USE_FAKE_STATEVECTOR),
-            "shot_branching_enable": bool(USE_FAKE_STATEVECTOR),
         },
         "noise": _noise_report(),
         "weights": {
@@ -859,16 +828,6 @@ elif USE_STATEVECTOR:
         max_parallel_experiments=1,
     )
     configure_aer_simulator_device(backend, use_gpu=USE_GPU)
-
-elif USE_FAKE_STATEVECTOR:
-
-    FAKE_DEVICE, backend = make_fake_statevector_aer_backend(
-        FAKE_BACKEND_NAME,
-        seed_simulator=BASE_SEED,
-        required_qubits=NUM_U_QUBITS,
-        use_gpu=USE_GPU,
-        shot_branching_enable=True,
-    )
 
 elif USE_FAKE_BACKEND:
 
@@ -1145,15 +1104,6 @@ else:
 
     if USE_STATEVECTOR:
         print("Backend: AerSimulator (statevector, noiseless)")
-    elif USE_FAKE_STATEVECTOR:
-        print(
-            f"Backend: {FAKE_BACKEND_NAME} snapshot via AerSimulator "
-            "(forced statevector trajectories)"
-        )
-        print(
-            "Noise: fake-backend device snapshot; finite-shot noisy "
-            "statevector trajectories with shot branching"
-        )
     elif USE_FAKE_BACKEND:
         print(f"Backend: {FAKE_BACKEND_NAME} snapshot via AerSimulator")
         print("Noise: fake-backend device snapshot; custom noise channels disabled")
@@ -1198,11 +1148,7 @@ transpiled_gate_counts = _gate_count_list(exec_circuits)
 _need_ideal_reference = (
     not USE_REAL_HARDWARE
     and not USE_STATEVECTOR
-    and (
-        USE_FAKE_BACKEND
-        or USE_FAKE_STATEVECTOR
-        or (USE_AER_SIMULATOR and _CUSTOM_NOISE_ACTIVE)
-    )
+    and (USE_FAKE_BACKEND or (USE_AER_SIMULATOR and _CUSTOM_NOISE_ACTIVE))
 )
 
 ideal_expectation = None
