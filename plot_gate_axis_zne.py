@@ -591,15 +591,63 @@ def generate_method_by_noise_plot(
     axis.set_ylabel(METHOD_NOISE_Y_LABEL)
     axis.grid(True, axis="y", alpha=0.3)
     axis.set_xlim(-0.5, len(selected_noises) - 0.5)
-    axis.legend(loc="best")
+
+    # Always save three variants so no automatic overlap judgement is needed:
+    #   1) basename.png              -> plot WITH in-axis legend
+    #   2) basename_no_legend.png    -> identical plot WITHOUT legend
+    #   3) basename_legend.png       -> legend-only image
+    # The same handles/labels and default Matplotlib legend settings are reused,
+    # so legend font and marker sizing stay consistent across all three outputs.
+    legend_handles, legend_labels = axis.get_legend_handles_labels()
+    legend_artist = None
+    if legend_handles:
+        legend_artist = axis.legend(loc="best")
+
     figure.tight_layout()
 
     output_path = out_dir / f"{basename}.png"
+    no_legend_output_path = out_dir / f"{basename}_no_legend.png"
+    legend_output_path = out_dir / f"{basename}_legend.png"
+    dpi_value = SAVE_DPI if save_dpi is None else int(save_dpi)
+
+    # Variant 1: with legend.
     figure.savefig(
         output_path,
-        dpi=SAVE_DPI if save_dpi is None else int(save_dpi),
+        dpi=dpi_value,
         bbox_inches="tight",
     )
+
+    # Variant 2: without legend.
+    if legend_artist is not None:
+        legend_artist.remove()
+    figure.savefig(
+        no_legend_output_path,
+        dpi=dpi_value,
+        bbox_inches="tight",
+    )
+
+    # Variant 3: legend only.
+    if legend_handles:
+        legend_figure = plt.figure(figsize=(6.0, 4.0))
+        separate_legend = legend_figure.legend(
+            legend_handles,
+            legend_labels,
+            loc="center",
+            frameon=True,
+        )
+        legend_figure.canvas.draw()
+        renderer = legend_figure.canvas.get_renderer()
+        legend_bbox = separate_legend.get_window_extent(renderer=renderer)
+        legend_bbox_inches = legend_bbox.transformed(
+            legend_figure.dpi_scale_trans.inverted()
+        )
+        legend_figure.savefig(
+            legend_output_path,
+            dpi=dpi_value,
+            bbox_inches=legend_bbox_inches,
+            pad_inches=0.12,
+        )
+        plt.close(legend_figure)
     should_show = SHOW_PLOTS if show_plots is None else bool(show_plots)
     if should_show:
         plt.show()
@@ -610,7 +658,10 @@ def generate_method_by_noise_plot(
         print("Input reports:")
         for path in paths:
             print(f"  {path}")
-        print(f"\nSaved plot:\n  {output_path}")
+        print(f"\nSaved plot with legend:\n  {output_path}")
+        print(f"Saved plot without legend:\n  {no_legend_output_path}")
+        if legend_handles:
+            print(f"Saved legend-only image:\n  {legend_output_path}")
     return output_path
 
 
