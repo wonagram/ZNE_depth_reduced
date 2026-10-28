@@ -105,7 +105,7 @@ def _selected_names(value: Any, all_names: Iterable[str]) -> list[str]:
 def _iter_experiment_points(
     experiment: dict[str, Any],
 ) -> Iterator[tuple[int, int, int]]:
-    """Yield (num_qubits, depth, depth_round) in depth-major order."""
+    """Yield (num_qubits, depth, depth_round) by ordinal depth round."""
     mapping = experiment.get("depths_by_num_qubits")
     if mapping is not None:
         normalized = {
@@ -177,6 +177,20 @@ def _build_jobs(
     method_order = {name: index for index, name in enumerate(all_methods)}
     profile_default_order = {
         name: index for index, name in enumerate(all_profiles)
+    }
+
+    # Circuit order is an explicit configuration contract. Falling back to the
+    # experiment-list position keeps custom/temporary circuit families usable,
+    # but the four production families never depend on incidental list order.
+    configured_circuit_order = [
+        str(name) for name in getattr(
+            cfg,
+            "CIRCUIT_ORDER",
+            ("random_type", "hea_cz", "hea_crz", "hea_rzz"),
+        )
+    ]
+    circuit_order = {
+        name: index for index, name in enumerate(configured_circuit_order)
     }
 
     raw_jobs: list[dict[str, Any]] = []
@@ -251,25 +265,24 @@ def _build_jobs(
                         )),
                         "_sort_key": (
                             int(profile.get("batch_phase", 0)),
+                            # STRICT ORDER:
+                            #   round -> qubit -> circuit -> noise -> method
+                            # Existing reports are handled later by exact-case
+                            # skipping and therefore never change this ordering.
                             int(depth_round),
-                            # Finish the low-cost circuit-folding jobs before
-                            # global/local jobs in the same depth round.
-                            int(method_order[method]),
-                            # Within global/local, prefer fewer estimated wires.
-                            # With 5q folds [1,3,5], 25-wire 5q jobs run before
-                            # 28-wire 4q jobs, reducing the chance that one heavy
-                            # 4q job blocks all 5q results.
-                            int(
-                                num_qubits * max(fold_factors)
-                                if method in {"global", "local"}
-                                else num_qubits
-                            ),
                             int(num_qubits),
-                            int(experiment_order),
+                            int(circuit_order.get(
+                                str(merged["unitary"]),
+                                len(circuit_order) + experiment_order,
+                            )),
                             int(profile.get(
                                 "order_priority",
                                 profile_default_order[profile_name],
                             )),
+                            int(method_order[method]),
+                            # Deterministic fallback only; normally redundant
+                            # because production circuit names are unique.
+                            int(experiment_order),
                         ),
                     })
 
@@ -300,23 +313,42 @@ def _group_jobs_by_stage(jobs: list[Job]) -> list[tuple[tuple[int, int], list[Jo
 
 
 def _validate_strict_batch_order(jobs: list[Job]) -> None:
-    """Reject any plan that can return to an earlier depth round or phase.
+    """Reject any plan that violates phase -> round -> qubit ordering.
 
-    The required sequence is:
-      phase -1: small FakeQuebec smoke test;
-      phase  0: all normal-Aer jobs, globally depth-major;
-      phase  1: all full FakeQuebec jobs, globally depth-major.
+    Required high-level sequence:
+      phase -1: optional small FakeQuebec smoke test;
+      phase  0: all normal-Aer jobs, round-major and qubit-major within round;
+      phase  1: all full FakeQuebec jobs, round-major and qubit-major within round.
+
+    In particular, once a round moves from 2q to 3q, no later job in that same
+    phase/round may return to 1q or 2q.
     """
-    previous: tuple[int, int] | None = None
+    previous_stage: tuple[int, int] | None = None
+    previous_qubits: int | None = None
+
     for job in jobs:
-        current = _stage_key(job)
-        if previous is not None and current < previous:
+        current_stage = _stage_key(job)
+        if previous_stage is not None and current_stage < previous_stage:
             raise ValueError(
                 "Batch ordering regression detected: "
-                f"job {job.index} has phase/round {current} after {previous}. "
-                "A later depth round must never be followed by an earlier one."
+                f"job {job.index} has phase/round {current_stage} after "
+                f"{previous_stage}. A later depth round must never be followed "
+                "by an earlier one."
             )
-        previous = current
+
+        if current_stage != previous_stage:
+            previous_qubits = None
+
+        if previous_qubits is not None and job.num_qubits < previous_qubits:
+            raise ValueError(
+                "Qubit-order regression detected: "
+                f"job {job.index} returns to {job.num_qubits}q after "
+                f"{previous_qubits}q inside phase/round {current_stage}. "
+                "Each round must run 1q -> 2q -> 3q -> 4q -> 5q."
+            )
+
+        previous_stage = current_stage
+        previous_qubits = int(job.num_qubits)
 
         if job.batch_phase == -1:
             if job.profile_name != "fake_quebec_statevector_smoke":
@@ -780,8 +812,8 @@ def main() -> int:
         + ("disabled" if timeout_seconds is None else _format_duration(timeout_seconds))
     )
     print(
-        "Order guarantee : ALL normal-Aer round 1 -> round 2 -> "
-        "round 3 -> round 4/5 -> ALL FakeQuebec rounds"
+        "Order guarantee : phase -> depth round -> qubit count -> circuit -> "
+        "noise profile -> method"
     )
     print("=" * 88)
 
