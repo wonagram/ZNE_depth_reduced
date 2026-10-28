@@ -156,7 +156,7 @@ NUM_U_QUBITS = int(override(1, _CLI_ARGS.num_qubits))
 # ============================================================
 # Circuit drawing
 # ============================================================
-DRAW_CIRCUIT = True
+DRAW_CIRCUIT = False
 DRAW_DEPTH_FOLDED = 3
 
 # ============================================================
