@@ -31,7 +31,7 @@ STOP_ON_FAILURE = False
 # Prevent one unexpectedly expensive simulation from blocking every later job.
 # A timed-out child process is terminated, recorded as FAILED/TIMEOUT, and the
 # batch continues. Set to 0 or None to disable the timeout.
-JOB_TIMEOUT_SECONDS = 12 * 60 * 60  # 12 hours per job
+JOB_TIMEOUT_SECONDS = 12 * 60 * 60  # 4 hours per job
 
 # Select the visible NVIDIA GPU(s). "0" means the first GPU.
 CUDA_VISIBLE_DEVICES = "0"
@@ -57,7 +57,7 @@ COMMON = {
     # The dedicated FakeQuebec smoke profile is excluded here and is used only
     # by the small first experiment below.
     "profiles": [
-        "aer_constant_depolarizing",
+        "aer_small_constant_depolarizing_0p2pct",
         "aer_increasing_pauli",
         "aer_increasing_pauli_amplitude_damping",
         "fake_quebec_statevector",
@@ -102,10 +102,12 @@ EXECUTION_PROFILES = {
     },
 
     # Phase 0: custom-Aer profiles run first in depth-round order.
-    "aer_constant_depolarizing": {
+    "aer_small_constant_depolarizing_0p2pct": {
         "backend": "aer_simulator",
         "noise": "constant_depolarizing",
-        "report_tag": "GPU_constant_depolarizing",
+        # 0.2% = 0.002 depolarizing probability.
+        "depolarizing_strength": 0.002,
+        "report_tag": "GPU_small_constant_depolarizing_0p2pct",
         "batch_phase": 0,
         "phase_label": "PHASE B - Normal Aer depth-major experiments",
         "order_priority": 0,
@@ -149,34 +151,18 @@ EXECUTION_PROFILES = {
 # different complete-repeat boundaries. Add as many groups as needed.
 #
 # STRICT ORDER CONTRACT:
-#   A) Run the three-job FakeQuebec smoke test first. Existing smoke reports are
-#      skipped one exact case at a time, just like every other job.
-#   B) For normal Aer, the order is STRICTLY:
-#         round -> qubit count -> circuit family -> noise profile -> ZNE method
-#      with qubits 1q -> 2q -> 3q -> 4q -> 5q and circuit families
-#      random_type -> hea_cz -> hea_crz -> hea_rzz whenever they exist.
-#      Therefore ALL round-1 work for 1q is considered before 2q, ALL 2q work
-#      before 3q, etc. Existing reports only skip that exact job; they never
-#      cause the runner to resume from a later qubit/circuit block.
-#   C) Only after all normal-Aer rounds finish, run the complete FakeQuebec
-#      statevector-trajectory phase, using the same round/qubit/circuit order.
+#   A) Run the three-job FakeQuebec smoke test first.
+#   B) Excluding FakeQuebec, complete EVERY backend/circuit/qubit/method job in
+#      depth round 1 before ANY job in depth round 2; then round 3, round 4, etc.
+#      Thus a normal-Aer round-1 depth (roughly 24/27/30/32) never appears after
+#      a normal-Aer round-2/3/4 job has started.
+#   C) Only after all normal Aer depth rounds finish, run the complete
+#      FakeQuebec statevector-trajectory phase, also in depth-major order.
 # random_type joins each round by ordinal position because its depths differ.
 # ============================================================
-
-# Explicit circuit-family order used by run_experiments.py. Do not infer this
-# from dictionary/list position: keeping it explicit prevents a later edit from
-# accidentally moving hea_rzz ahead of hea_crz, or a heavy 4q case ahead of a
-# missing 2q case.
-CIRCUIT_ORDER = [
-    "random_type",
-    "hea_cz",
-    "hea_crz",
-    "hea_rzz",
-]
-
 EXPERIMENTS = [
     # This tests circuit folding, global, and local dynamic execution with the
-    # FakeQuebec statevector-trajectory backend before the overnight jobs.
+    # new FakeQuebec statevector-trajectory backend before the overnight jobs.
     {
         "name": "fake_quebec_statevector_smoke_test",
         "unitary": "hea_cz",
@@ -184,29 +170,6 @@ EXPERIMENTS = [
         "methods": "all",
         "depths_by_num_qubits": {
             2: [30],
-        },
-    },
-
-    # Round order for random_type:
-    #   R1: 1q=30, 2q=24, 3q=27, 4q=32, 5q=32
-    #   R2: 1q=60, 2q=48, 3q=54, 4q=64, 5q=64
-    #   R3: 1q=90, 2q=72, 3q=81, 4q=96, 5q=96
-    #   R4: 1q=120, 2q=96, 3q=108, 4q=128, 5q=128
-    #   R5: only 2q=120 exists.
-    {
-        "name": "random_type_complete_repeats",
-        "unitary": "random_type",
-        "depths_by_num_qubits": {
-            # 1q repeat: RX -> RY -> RZ (period 3).
-            1: [30, 60, 90, 120],
-            # 2q full axis/CX-direction phase repeat: period 12.
-            2: [24, 48, 72, 96, 120],
-            # 3q fixed structural repeat: period 9.
-            3: [27, 54, 81, 108],
-            # 4q regularized X-Y-X-Z/CX schedule: period 8.
-            4: [32, 64, 96, 128],
-            # 5q RX/RY/CX/CX/RY/RZ/CX/CX schedule: period 8.
-            5: [32, 64, 96, 128],
         },
     },
 
@@ -220,27 +183,45 @@ EXPERIMENTS = [
             5: [32, 64, 96, 128],
         },
     },
-
     {
         "name": "hea_crz_complete_repeats",
         "unitary": "hea_crz",
         "depths_by_num_qubits": {
             # One 2q HEA-CRZ repeat consumes 6 physical-depth slots, and
-            # 30 is also a complete boundary (5 repeats).
+            # 30 is also a complete boundary (5 repeats).  Use the same
+            # 30-step sweep as the other circuit families.
             2: [30, 60, 90, 120],
             3: [30, 60, 90, 120],
             4: [30, 60, 90, 120],
             5: [30, 60, 90, 120],
         },
-    },
-
-    {
+    },    {
         "name": "hea_rzz_complete_repeats",
         "unitary": "hea_rzz",
         "depths_by_num_qubits": {
             2: [30, 60, 90, 120],
             3: [32, 64, 96, 128],
             4: [32, 64, 96, 128],
+            5: [32, 64, 96, 128],
+        },
+    },
+
+
+    # random_type preserves the existing 1-4q behavior.  The new 5q circuit
+    # uses the requested deterministic 8-depth RX/RY/CX/CX/RY/RZ/CX/CX repeat.
+    {
+        "name": "random_type_complete_repeats",
+        "unitary": "random_type",
+        "depths_by_num_qubits": {
+            # 1q repeat: RX -> RY -> RZ (period 3).
+            1: [30, 60, 90, 120],
+            # 2q full axis/CX-direction phase repeat: period 12.
+            2: [24, 48, 72, 96, 120],
+            # 3q fixed structural repeat: period 9.
+            3: [27, 54, 81, 108],
+            # 4q regularized X-Y-X-Z/CX schedule: period 8.
+            4: [32, 64, 96, 128],
+            # 5q requested RX/RY/CX/CX/RY/RZ/CX/CX schedule: period 8.
             5: [32, 64, 96, 128],
         },
     },

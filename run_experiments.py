@@ -42,6 +42,7 @@ class Job:
     machine: str
     backend: str
     noise: str
+    depolarizing_strength: float | None
     fake_backend_name: str | None
     num_qubits: int
     unitary: str
@@ -179,20 +180,6 @@ def _build_jobs(
         name: index for index, name in enumerate(all_profiles)
     }
 
-    # Circuit order is an explicit configuration contract. Falling back to the
-    # experiment-list position keeps custom/temporary circuit families usable,
-    # but the four production families never depend on incidental list order.
-    configured_circuit_order = [
-        str(name) for name in getattr(
-            cfg,
-            "CIRCUIT_ORDER",
-            ("random_type", "hea_cz", "hea_crz", "hea_rzz"),
-        )
-    ]
-    circuit_order = {
-        name: index for index, name in enumerate(configured_circuit_order)
-    }
-
     raw_jobs: list[dict[str, Any]] = []
     for experiment_order, experiment in enumerate(cfg.EXPERIMENTS):
         if not experiment.get("enabled", True):
@@ -239,6 +226,11 @@ def _build_jobs(
                         "machine": str(merged.get("machine", "gpu")),
                         "backend": str(profile["backend"]),
                         "noise": str(profile["noise"]),
+                        "depolarizing_strength": (
+                            None
+                            if profile.get("depolarizing_strength") is None
+                            else float(profile["depolarizing_strength"])
+                        ),
                         "fake_backend_name": profile.get("fake_backend_name"),
                         "num_qubits": num_qubits,
                         "unitary": str(merged["unitary"]),
@@ -265,24 +257,25 @@ def _build_jobs(
                         )),
                         "_sort_key": (
                             int(profile.get("batch_phase", 0)),
-                            # STRICT ORDER:
-                            #   round -> qubit -> circuit -> noise -> method
-                            # Existing reports are handled later by exact-case
-                            # skipping and therefore never change this ordering.
+                            # First finish the same ordinal depth round across
+                            # all configured circuit families.
                             int(depth_round),
+                            # Inside a round, finish every job for 1q before 2q,
+                            # every 2q job before 3q, and so on.
                             int(num_qubits),
-                            int(circuit_order.get(
-                                str(merged["unitary"]),
-                                len(circuit_order) + experiment_order,
-                            )),
+                            # Within a qubit count, run random_type first, then
+                            # preserve the configured order of the HEA families.
+                            0 if str(merged["unitary"]) == "random_type" else 1,
+                            int(experiment_order),
+                            # Finish every configured noise profile for the
+                            # circuit before moving to the next circuit.
                             int(profile.get(
                                 "order_priority",
                                 profile_default_order[profile_name],
                             )),
+                            # Finally run all configured ZNE methods for that
+                            # circuit/noise combination.
                             int(method_order[method]),
-                            # Deterministic fallback only; normally redundant
-                            # because production circuit names are unique.
-                            int(experiment_order),
                         ),
                     })
 
@@ -451,6 +444,16 @@ def _validate_jobs(jobs: list[Job], u_config) -> list[str]:
             )
         if job.backend == "aer_simulator" and job.noise == "none":
             warnings.append(f"Job {job.index}: AerSimulator is configured without custom noise.")
+        if job.depolarizing_strength is not None:
+            if job.noise != "constant_depolarizing":
+                raise ValueError(
+                    f"Job {job.index}: depolarizing_strength is only valid for "
+                    "noise='constant_depolarizing'."
+                )
+            if not 0.0 <= job.depolarizing_strength <= 1.0:
+                raise ValueError(
+                    f"Job {job.index}: depolarizing_strength must be between 0 and 1."
+                )
 
         if job.method in {"global", "local"}:
             physical = job.num_qubits * max(job.fold_factors)
@@ -482,6 +485,11 @@ def _command(job: Job) -> list[str]:
         "--gate-weight-2q", str(job.gate_weight_2q),
         "--fold-factors", *[str(value) for value in job.fold_factors],
     ]
+    if job.depolarizing_strength is not None:
+        command.extend([
+            "--depolarizing-strength",
+            str(job.depolarizing_strength),
+        ])
     if job.fake_backend_name:
         command.extend(["--fake-backend-name", str(job.fake_backend_name)])
     if job.method == "local":
