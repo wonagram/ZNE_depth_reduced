@@ -58,12 +58,18 @@ REAL_HARDWARE_DEVICE_NAME = override(
 # ============================================================
 # These flags apply only when USE_REAL_HARDWARE=False.
 # Select exactly one of the three simulation backends.
-USE_AER_SIMULATOR, USE_STATEVECTOR, USE_FAKE_BACKEND = resolve_backend_flags(
+(
+    USE_AER_SIMULATOR,
+    USE_STATEVECTOR,
+    USE_FAKE_BACKEND,
+    USE_FAKE_STATEVECTOR,
+) = resolve_backend_flags(
     _CLI_ARGS.backend,
     use_real_hardware=USE_REAL_HARDWARE,
     default_use_aer_simulator=True,
     default_use_statevector=False,
     default_use_fake_backend=False,
+    default_use_fake_statevector=False,
 )
 
 # Fake-backend mode uses an IBM fake-device snapshot to configure Aer.
