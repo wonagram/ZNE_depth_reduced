@@ -1,16 +1,20 @@
-"""GPU-2 batch configuration: run only original Round 3 and Round 4.
+"""GPU-2 multi-GPU batch configuration: original Round 3 and Round 4 only.
 
-This file intentionally keeps the same experiment semantics as the primary
-experiment_config.py, but isolates output paths and restricts the depth sweep
-to the third and fourth depth rounds only.
+Strict scheduling contract used by run_experiments_2.py:
+    Phase -> Round -> qubit count
 
-Execution order inside each phase is strictly:
+Within each qubit barrier, circuit/noise-profile/method jobs are distributed over
+all configured physical GPUs concurrently. Jobs are queued in the original
+circuit order. The next qubit count does not begin until every job for the
+current qubit count has finished.
+
+Round order:
     Round 3: 1q -> 2q -> 3q -> 4q -> 5q
     Round 4: 1q -> 2q -> 3q -> 4q -> 5q
-and, within each qubit count:
+Circuit order inside each qubit count:
     random_type -> hea_cz -> hea_crz -> hea_rzz
 
-There is NO per-job timeout.
+There is deliberately NO per-job timeout.
 """
 
 from __future__ import annotations
@@ -24,19 +28,26 @@ STREAM_OUTPUT = False
 PROGRESS_UPDATE_SECONDS = 30
 STOP_ON_FAILURE = False
 
-# Never terminate a long-running job because of elapsed time.
+# Permanent project rule: never terminate a long-running job by elapsed time.
 JOB_TIMEOUT_SECONDS = None
 
-# On a separate GPU machine with one visible GPU, keep "0".
-# If this config is used on the same multi-GPU host and GPU 0 is occupied,
-# change this to the desired visible device index, e.g. "1".
+# Physical NVIDIA GPU indices on the GPU-2 workstation.
+# Each child process receives exactly one of these through CUDA_VISIBLE_DEVICES.
+GPU_IDS = [0, 1, 2, 3, 4, 5, 6, 7]
+
+# Kept only for compatibility with helper functions in run_experiments.py.
+# The multi-GPU runner does NOT use this value to schedule child jobs.
 CUDA_VISIBLE_DEVICES = "0"
 
 # ============================================================
-# Separate GPU-2 output paths: do not overlap GPU-1 output directories
+# GPU-2 output paths (separate from GPU-1)
 # ============================================================
+# Keep the existing GPU-2 report folder so a restarted multi-GPU batch can
+# reuse/skip any valid reports already produced by the earlier single-GPU run.
 REPORT_DIRECTORY = "./zne_reports_gpu2_round3_round4"
-LOG_DIRECTORY = "./batch_logs_gpu2_round3_round4"
+
+# Use a new log root so multi-GPU logs are easy to distinguish.
+LOG_DIRECTORY = "./batch_logs_gpu2_round3_round4_multigpu"
 
 METHOD_FILES = {
     "circuit_folding": "ZNE_circuit_folding.py",
@@ -71,7 +82,7 @@ COMMON = {
 # Backend/noise profiles
 # ============================================================
 EXECUTION_PROFILES = {
-    # Phase 0: custom Aer jobs, Round 3 then Round 4.
+    # Phase 0: custom-Aer jobs.
     "aer_small_constant_depolarizing_0p2pct": {
         "backend": "aer_simulator",
         "noise": "constant_depolarizing",
@@ -98,7 +109,8 @@ EXECUTION_PROFILES = {
         "order_priority": 2,
     },
 
-    # Phase 1: full FakeQuebec jobs for the same Round 3/4 depth points.
+    # Phase 1: FakeQuebec jobs after the Aer phase, preserving the same
+    # Round/qubit/circuit barrier order.
     "fake_quebec_statevector": {
         "backend": "fake_statevector",
         "fake_backend_name": "FakeQuebec",
@@ -114,9 +126,8 @@ EXECUTION_PROFILES = {
 # ============================================================
 # ONLY ORIGINAL ROUND 3 AND ROUND 4
 #
-# depth_round_offset=2 is consumed by run_experiments_2.py so the two retained
-# depth positions are displayed and sorted as Round 3 and Round 4, not as a new
-# Round 1 and Round 2.
+# depth_round_offset=2 is consumed by run_experiments_2.py so these retained
+# positions keep their original labels: Round 3 and Round 4.
 # ============================================================
 EXPERIMENTS = [
     {
@@ -169,6 +180,8 @@ EXPERIMENTS = [
 # ============================================================
 # Git checkpointing
 # ============================================================
+# Keep disabled while eight child jobs can finish close together.  Reports can
+# be committed/pushed manually after or during the batch without stopping it.
 GIT = {
     "enabled": False,
     "push": False,
