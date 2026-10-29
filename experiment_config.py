@@ -31,7 +31,7 @@ STOP_ON_FAILURE = False
 # Prevent one unexpectedly expensive simulation from blocking every later job.
 # A timed-out child process is terminated, recorded as FAILED/TIMEOUT, and the
 # batch continues. Set to 0 or None to disable the timeout.
-JOB_TIMEOUT_SECONDS = 12 * 60 * 60  # 4 hours per job
+JOB_TIMEOUT_SECONDS = None
 
 # Select the visible NVIDIA GPU(s). "0" means the first GPU.
 CUDA_VISIBLE_DEVICES = "0"
