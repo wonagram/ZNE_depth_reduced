@@ -54,8 +54,8 @@ except ImportError:  # fallback: infer ordinal depth rounds from available repor
 # ============================================================
 # User configuration
 # ============================================================
-REPORT_DIRECTORY = "./zne_reports"
-PLOT_OUTPUT_ROOT = "./zne_plots_batch_0p2pct"
+REPORT_DIRECTORY = "./zne_reports_gpu2_round3_round4"
+PLOT_OUTPUT_ROOT = "./zne_plots_gpu2_round3_round4"
 ALLOW_PARTIAL_GROUPS = True
 SAVE_DPI = 200
 SHOW_PLOTS = False

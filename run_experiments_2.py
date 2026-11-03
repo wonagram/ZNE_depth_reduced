@@ -1,32 +1,26 @@
-"""Run GPU-2 Round 3/4 on eight physical GPUs with strict barriers.
+"""GPU2 ZNE ver2: eight-GPU work-conserving, priority-ordered scheduler.
 
-The repository's run_experiments.py remains the source of truth for job
-expansion, validation, report naming, report validation, and child commands.
-This wrapper adds only multi-GPU scheduling.
+DISPATCH ORDER is Round 1 -> 2 -> 3 -> 4, and 2q -> 3q -> 4q -> 5q
+within each round; circuits: Random -> HEA-CZ -> HEA-CRZ -> HEA-RZZ.
 
-Scheduling rule
----------------
-Jobs are grouped by:
-    phase -> depth round -> qubit count
+There are NO completion barriers: when a GPU becomes free, it gets the next
+unstarted job, even if an earlier qubit/round still has running jobs. This
+keeps every GPU busy as long as pending jobs exist. Older running jobs may
+finish after newer ones. There is NEVER an elapsed-time job timeout.
 
-A group is a strict qubit barrier. Up to eight jobs inside that qubit group run
-in parallel, one child process per physical GPU. Jobs remain queued in the base
-order (random_type -> hea_cz -> hea_crz -> hea_rzz, then profile/method order).
-The next qubit count never starts until every job for the current qubit count
-has finished. Therefore the original Round/qubit ordering cannot be overtaken
-by a faster GPU, while all eight GPUs can stay busy across circuit families.
-
-There is NO elapsed-time timeout.  Every child calls the base runner with
-``timeout_seconds=None`` regardless of any external setting.
+Requires the repository's unchanged run_experiments.py, U_config.py, and
+three ZNE method programs. Replace the old GPU2 experiment_config_2.py and run_experiments_2.py only
+AFTER terminating the old batch and workers; never update running scripts.
 """
 
 from __future__ import annotations
 
 import argparse
-from collections import deque
-from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+from collections import Counter, deque
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import asdict
 from datetime import datetime
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -39,132 +33,161 @@ from typing import Any
 import experiment_config_2 as cfg2
 import run_experiments as runner
 
-
-# ---------------------------------------------------------------------------
-# Make the existing base runner use the GPU-2 configuration.
-# ---------------------------------------------------------------------------
 runner.cfg = cfg2
 
-_base_iter_experiment_points = runner._iter_experiment_points
+GPU_IDS = tuple(int(gpu) for gpu in cfg2.GPU_IDS)
+PRINT_LOCK = threading.Lock()
+MONITORED_PROGRAMS = {
+    "run_experiments.py",
+    "run_experiments_2.py",
+    "ZNE_circuit_folding.py",
+    "ZNE_depth_reduced_global.py",
+    "ZNE_depth_reduced_local.py",
+}
 
 
-def _iter_experiment_points_with_offset(experiment):
-    offset = int(experiment.get("depth_round_offset", 0))
-    for num_qubits, depth, depth_round in _base_iter_experiment_points(experiment):
-        yield num_qubits, depth, depth_round + offset
+def say(message: str) -> None:
+    with PRINT_LOCK:
+        print(message, flush=True)
 
 
-runner._iter_experiment_points = _iter_experiment_points_with_offset
-
-# Permanent safety contract for this project.
-if getattr(cfg2, "JOB_TIMEOUT_SECONDS", None) is not None:
-    raise RuntimeError(
-        "experiment_config_2.py must keep JOB_TIMEOUT_SECONDS = None."
-    )
-
-GPU_IDS = tuple(int(value) for value in getattr(cfg2, "GPU_IDS", ()))
-if not GPU_IDS:
-    raise RuntimeError("experiment_config_2.py must define at least one GPU in GPU_IDS.")
-if len(set(GPU_IDS)) != len(GPU_IDS):
-    raise RuntimeError(f"GPU_IDS must be unique; got {GPU_IDS!r}.")
-
-_PRINT_LOCK = threading.Lock()
-
-
-def _safe_print(*args, **kwargs) -> None:
-    with _PRINT_LOCK:
-        print(*args, **kwargs, flush=True)
-
-
-def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
-    mode = parser.add_mutually_exclusive_group()
-    mode.add_argument("--dry-run", action="store_true", help="Preview only.")
-    mode.add_argument("--run", action="store_true", help="Execute simulations.")
-    parser.add_argument("--profile", action="append", help="Run only named profile(s).")
-    parser.add_argument("--experiment", action="append", help="Run only named experiment group(s).")
-    parser.add_argument("--method", action="append", choices=tuple(cfg2.METHOD_FILES))
-    parser.add_argument("--limit", type=int, help="Limit expanded jobs after filtering.")
-    parser.add_argument("--rerun-existing", action="store_true")
-    parser.add_argument("--no-git", action="store_true")
-    parser.add_argument(
-        "--stream-output",
-        action="store_true",
-        help="Also print all child output. Not recommended with eight concurrent jobs.",
-    )
-    parser.add_argument(
-        "--progress-seconds",
-        type=float,
-        help="Override concise heartbeat interval.",
-    )
-    parser.add_argument(
-        "--show-commands",
-        action="store_true",
-        help="In dry-run mode, show child commands.",
-    )
+def arguments() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--dry-run", action="store_true", help="Print all jobs and skips; do not run simulations.")
+    group.add_argument("--run", action="store_true", help="Run GPU jobs without barriers or timeouts.")
+    parser.add_argument("--show-commands", action="store_true", help="In dry-run, print each child command.")
+    parser.add_argument("--progress-seconds", type=float, default=cfg2.PROGRESS_UPDATE_SECONDS)
     return parser.parse_args()
 
 
-def _circuit_order() -> dict[str, int]:
-    return {
-        str(experiment["name"]): index
-        for index, experiment in enumerate(cfg2.EXPERIMENTS)
-        if experiment.get("enabled", True)
-    }
+def validate_plan(jobs: list[Any]) -> None:
+    if cfg2.JOB_TIMEOUT_SECONDS is not None:
+        raise ValueError("JOB_TIMEOUT_SECONDS must remain None. No timeout is allowed.")
+    if not cfg2.SKIP_EXISTING:
+        raise ValueError("SKIP_EXISTING must be True.")
+    if not GPU_IDS or len(set(GPU_IDS)) != len(GPU_IDS):
+        raise ValueError("GPU_IDS must be a nonempty sequence of distinct GPU indices.")
+    if len(jobs) != 160:
+        raise ValueError(f"Expected exactly 160 ver2 jobs; got {len(jobs)}.")
 
-
-def _barrier_key(job) -> tuple[int, int, int]:
-    return (
-        int(job.batch_phase),
-        int(job.depth_round),
-        int(job.num_qubits),
-    )
-
-
-def _group_by_barrier(jobs) -> list[tuple[tuple[int, int, int], list[Any]]]:
-    groups: list[tuple[tuple[int, int, int], list[Any]]] = []
+    priority = []
     for job in jobs:
-        key = _barrier_key(job)
-        if not groups or groups[-1][0] != key:
-            groups.append((key, [job]))
+        if job.num_qubits not in (2, 3, 4, 5):
+            raise ValueError(f"Unexpected qubit count: {job.num_qubits}")
+        if job.depth_round not in (0, 1, 2, 3) or job.batch_phase != 0:
+            raise ValueError(f"Unexpected round/phase: {job.depth_round}, {job.batch_phase}")
+        if job.profile_name != "aer_increasing_pauli" or job.backend != "aer_simulator":
+            raise ValueError("Only the custom Aer increasing-Pauli profile is allowed.")
+        if job.noise != "increasing_random_pauli" or job.report_tag != "GPU_increasing_pauli":
+            raise ValueError("Unexpected noise setting or report tag.")
+        if job.num_qubits <= 3:
+            methods = {"circuit_folding", "global", "local"}
+            factors = (1, 3, 5, 7)
+        elif job.num_qubits == 4:
+            methods = {"circuit_folding", "global"}
+            factors = (1, 3, 5, 7)
         else:
-            groups[-1][1].append(job)
-    return groups
+            methods = {"circuit_folding", "global"}
+            factors = (1, 3, 5)
+        if job.method not in methods or job.fold_factors != factors:
+            raise ValueError(f"Unexpected methods/factors for {job.num_qubits}q: {job.method} {job.fold_factors}")
+        if Path(job.report_directory).name != "zne_reports_ver2":
+            raise ValueError("Report directory must be zne_reports_ver2.")
+        priority.append((job.depth_round, job.num_qubits))
+
+    if priority != sorted(priority):
+        raise ValueError("Wrong dispatch order: expected Round first, then increasing qubit count.")
+    expected_counts = {(r, q): (12 if q <= 3 else 8) for r in range(4) for q in (2, 3, 4, 5)}
+    if Counter(priority) != expected_counts:
+        raise ValueError("Wrong number of jobs per (round, qubit) group.")
 
 
-def _barrier_label(key, jobs) -> str:
-    phase, depth_round, num_qubits = key
-    circuits = []
+def existing_or_pending(jobs: list[Any]) -> tuple[list[Any], list[Any]]:
+    """Never replace an existing report, including one with incompatible content."""
+    completed, pending = [], []
+    conflicts = []
     for job in jobs:
-        if job.unitary not in circuits:
-            circuits.append(job.unitary)
-    return (
-        f"phase={phase} | Round {depth_round + 1} | {num_qubits}q | "
-        f"circuits={'/'.join(circuits)} | jobs={len(jobs)}"
-    )
+        if job.report_path.exists():
+            if runner._valid_existing_report(job):
+                completed.append(job)
+            else:
+                conflicts.append(str(job.report_path))
+        else:
+            pending.append(job)
+    if conflicts:
+        raise RuntimeError(
+            "STOP: Existing report(s) do not match the requested settings or are invalid. "
+            "They have NOT been modified. Inspect/move them manually before running:\n  "
+            + "\n  ".join(conflicts[:30])
+            + (f"\n  ... and {len(conflicts) - 30} more" if len(conflicts) > 30 else "")
+        )
+    return completed, pending
 
 
-def _validate_plan(jobs) -> None:
-    if getattr(cfg2, "JOB_TIMEOUT_SECONDS", None) is not None:
-        raise RuntimeError("Timeout must remain disabled (JOB_TIMEOUT_SECONDS = None).")
+def print_plan(jobs, completed, pending, *, show_commands):
+    say(f"Project root      : {Path(__file__).resolve().parent}")
+    say(f"Configured jobs   : {len(jobs)}")
+    say(f"Valid skips       : {len(completed)}")
+    say(f"Pending jobs      : {len(pending)}")
+    say(f"Physical GPUs     : {', '.join(map(str, GPU_IDS))}")
+    say(f"Report directory  : {cfg2.REPORT_DIRECTORY}")
+    say(f"Log directory     : {cfg2.LOG_DIRECTORY}")
+    say("Noise             : increasing_random_pauli ONLY")
+    say("Scheduling        : Round -> qubits -> circuit -> method (DISPATCH priority)")
+    say("Completion barrier: NONE; idle GPUs take next pending job immediately")
+    say("Job timeout       : NONE (permanently disabled)")
+    last_key = None
+    for job in jobs:
+        key = (job.depth_round + 1, job.num_qubits)
+        if key != last_key:
+            say(f"\n=== ROUND {key[0]} | {key[1]}q ===")
+            last_key = key
+        status = "SKIP" if job.report_path.exists() else "PLAN"
+        say(f"[{job.index:04d}/{job.total:04d}] {status} | {runner._job_description(job)} | factors={list(job.fold_factors)}")
+        if show_commands:
+            say("    " + " ".join(runner._command(job)))
+    say("\nDry run complete. No simulations or report files were modified.")
 
-    rounds = {int(job.depth_round) + 1 for job in jobs}
-    if not rounds.issubset({3, 4}):
-        raise RuntimeError(f"GPU2 plan must contain only Round 3/4; got {sorted(rounds)}")
 
-    # Reuse the base runner's strict phase/round/qubit validation if present.
-    validator = getattr(runner, "_validate_strict_batch_order", None)
-    if validator is not None:
-        validator(jobs)
+def active_project_jobs(project_root: Path) -> list[str]:
+    """Guard against starting a second 8-GPU batch on top of a running one."""
+    proc = Path("/proc")
+    if not proc.is_dir():
+        raise RuntimeError("GPU batch launch is supported only on Linux with /proc.")
+    running = []
+    for entry in proc.iterdir():
+        if not entry.name.isdigit() or int(entry.name) == os.getpid():
+            continue
+        try:
+            argv = [a.decode("utf-8", "replace") for a in (entry / "cmdline").read_bytes().split(b"\0") if a]
+            if not argv or not any(Path(a).name in MONITORED_PROGRAMS for a in argv):
+                continue
+            cwd = (entry / "cwd").resolve()
+            in_project = cwd == project_root or any(
+                Path(a).is_absolute() and Path(a).resolve().parent == project_root
+                for a in argv if a.endswith(".py")
+            )
+            if in_project:
+                running.append(f"PID {entry.name}: {' '.join(argv)[:180]}")
+        except (OSError, PermissionError, ProcessLookupError):
+            continue
+    return running
 
-    # Extra validation: barriers themselves may never regress.
-    keys = [_barrier_key(job) for job in jobs]
-    if keys != sorted(keys):
-        raise RuntimeError("Barrier order regression detected in expanded GPU2 jobs.")
+
+def acquire_run_lock(project_root: Path):
+    """Stop accidental concurrent launches of this *new* runner."""
+    lock_path = project_root / ".gpu2_ver2_runner.lock"
+    handle = lock_path.open("a+")
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        handle.close()
+        raise RuntimeError(f"STOP: Another ver2 runner already holds {lock_path}.")
+    return handle
 
 
-def _preflight_each_gpu(project_root: Path) -> None:
-    """Verify Qiskit Aer sees a GPU when each physical device is isolated."""
+def preflight_gpu(project_root: Path) -> None:
     code = (
         "from qiskit_aer import AerSimulator; "
         "d=tuple(AerSimulator().available_devices()); "
@@ -172,356 +195,190 @@ def _preflight_each_gpu(project_root: Path) -> None:
         "print(d)"
     )
     for gpu_id in GPU_IDS:
-        env = dict(os.environ)
-        env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
-        completed = subprocess.run(
-            [sys.executable, "-c", code],
-            cwd=project_root,
-            env=env,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
+        env = dict(os.environ, CUDA_VISIBLE_DEVICES=str(gpu_id))
+        checked = subprocess.run(
+            [sys.executable, "-c", code], cwd=project_root, env=env,
+            text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         )
-        if completed.returncode != 0:
-            raise RuntimeError(
-                f"GPU {gpu_id} preflight failed:\n{completed.stdout.strip()}"
-            )
-        _safe_print(f"Preflight GPU {gpu_id}: PASS")
+        if checked.returncode:
+            raise RuntimeError(f"GPU {gpu_id} preflight failed:\n{checked.stdout.strip()}")
+        say(f"GPU {gpu_id} preflight: PASS")
 
 
-def _run_one_job(
-    job,
-    gpu_id: int,
-    *,
-    project_root: Path,
-    log_root: Path,
-    stream_output: bool,
-    progress_seconds: float,
-    batch_start: float,
-) -> dict[str, Any]:
-    env = dict(os.environ)
-    # Critical: each child sees exactly one physical GPU.
-    env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
+def run_job(job: Any, gpu_id: int, project_root: Path, log_root: Path,
+            batch_start: float, progress_seconds: float) -> dict[str, Any]:
+    env = dict(os.environ, CUDA_VISIBLE_DEVICES=str(gpu_id))
     env.setdefault("PYTHONUNBUFFERED", "1")
-
-    command = runner._command(job)
     log_path = log_root / f"gpu{gpu_id}_{job.slug}.log"
     start = time.monotonic()
 
-    def heartbeat(job_elapsed: float) -> None:
-        _safe_print(
+    def heartbeat(elapsed: float):
+        say(
             f"[{job.index:04d}/{job.total:04d}] RUNNING | GPU={gpu_id} | "
-            f"job={runner._format_duration(job_elapsed)} | "
+            f"job={runner._format_duration(elapsed)} | "
             f"batch={runner._format_duration(time.monotonic() - batch_start)} | "
             f"{runner._job_description(job)}"
         )
 
-    # Hard-coded None: this multi-GPU runner never kills a job due to runtime.
-    returncode = runner._run_child(
-        command,
-        cwd=project_root,
-        env=env,
-        log_path=log_path,
-        stream_output=stream_output,
-        progress_seconds=progress_seconds,
-        timeout_seconds=None,
-        heartbeat=heartbeat,
+    # Absolutely no elapsed-time timeout. We do not call kill/terminate here.
+    rc = runner._run_child(
+        runner._command(job), cwd=project_root, env=env, log_path=log_path,
+        stream_output=cfg2.STREAM_OUTPUT, progress_seconds=progress_seconds,
+        timeout_seconds=None, heartbeat=heartbeat,
     )
-    runtime = time.monotonic() - start
-    report_valid = returncode == 0 and runner._valid_existing_report(job)
-
+    elapsed = time.monotonic() - start
+    valid = rc == 0 and runner._valid_existing_report(job)
     return {
-        "job": job,
-        "gpu_id": gpu_id,
-        "returncode": returncode,
-        "runtime": runtime,
-        "report_valid": report_valid,
-        "log_path": log_path,
+        "returncode": rc, "runtime": elapsed, "report_valid": valid,
+        "log_path": str(log_path),
     }
 
 
-def _write_summary(path: Path, results: list[dict[str, Any]]) -> None:
-    path.write_text(json.dumps(results, indent=2), encoding="utf-8")
+def save_summary(path: Path, results: list[dict[str, Any]]) -> None:
+    # Rewriting the log summary does not touch any report or simulation process.
+    temp = path.with_suffix(".json.tmp")
+    temp.write_text(json.dumps(results, indent=2), encoding="utf-8")
+    temp.replace(path)
+
+
+def run_batch(project_root: Path, jobs: list[Any], completed: list[Any],
+              pending: list[Any], *, progress_seconds: float) -> int:
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_root = (project_root / cfg2.LOG_DIRECTORY / timestamp).resolve()
+    log_root.mkdir(parents=True, exist_ok=False)
+    summary_path = log_root / "batch_summary.json"
+    results: list[dict[str, Any]] = [
+        runner._job_record(job, status="skipped", gpu_id=None, runtime_seconds=0.0,
+                           report_path=str(job.report_path))
+        for job in completed
+    ]
+    save_summary(summary_path, results)
+
+    successes, failures, skipped = 0, 0, len(completed)
+    available = deque(GPU_IDS)
+    remaining = deque(pending)
+    active = {}
+    start_time = time.monotonic()
+    say(f"Total={len(jobs)}; skipped={skipped}; pending={len(remaining)}")
+
+    # ONE global queue and ONE thread pool for ALL rounds and ALL qubit counts.
+    # No barrier joins or waits for a qubit group/round to finish.
+    with ThreadPoolExecutor(max_workers=len(GPU_IDS)) as executor:
+        while remaining or active:
+            while remaining and available:
+                job = remaining.popleft()
+                # An external sync might have placed a valid report after the
+                # initial audit. Never overwrite or redundantly run that job.
+                if job.report_path.exists():
+                    if not runner._valid_existing_report(job):
+                        raise RuntimeError(f"STOP: existing incompatible report: {job.report_path}")
+                    skipped += 1
+                    results.append(runner._job_record(
+                        job, status="skipped", gpu_id=None,
+                        runtime_seconds=0.0, report_path=str(job.report_path)))
+                    save_summary(summary_path, results)
+                    say(f"[{job.index:04d}/{job.total:04d}] SKIP (appeared later) | {job.report_filename}")
+                    continue
+                gpu_id = available.popleft()
+                say(f"[{job.index:04d}/{job.total:04d}] START | GPU={gpu_id} | "
+                    f"round={job.depth_round + 1} | {runner._job_description(job)}")
+                future = executor.submit(
+                    run_job, job, gpu_id, project_root, log_root,
+                    start_time, progress_seconds,
+                )
+                active[future] = (job, gpu_id)
+
+            if not active:
+                continue
+
+            done, _ = wait(set(active), return_when=FIRST_COMPLETED)
+            for future in done:
+                job, gpu_id = active.pop(future)
+                available.append(gpu_id)
+                try:
+                    outcome = future.result()
+                except Exception as exc:
+                    failures += 1
+                    say(f"[{job.index:04d}/{job.total:04d}] FAILED | GPU={gpu_id} | runner error: {exc!r}")
+                    results.append(runner._job_record(
+                        job, status="failed", gpu_id=gpu_id,
+                        runner_exception=repr(exc), report_path=str(job.report_path)))
+                    save_summary(summary_path, results)
+                    continue
+
+                status = "success" if outcome["report_valid"] else "failed"
+                if status == "success":
+                    successes += 1
+                else:
+                    failures += 1
+                say(f"[{job.index:04d}/{job.total:04d}] {status.upper()} | GPU={gpu_id} | "
+                    f"time={runner._format_duration(outcome['runtime'])} | "
+                    f"round={job.depth_round + 1} | {runner._job_description(job)}")
+                results.append(runner._job_record(
+                    job, status=status, gpu_id=gpu_id,
+                    returncode=outcome["returncode"],
+                    runtime_seconds=outcome["runtime"],
+                    report_path=str(job.report_path), log_path=outcome["log_path"],
+                ))
+                save_summary(summary_path, results)
+
+    say("\n================== GPU2 VER2 BATCH COMPLETE ==================")
+    say(f"Processed: {successes + failures + skipped}/{len(jobs)}")
+    say(f"Succeeded: {successes} | Failed: {failures} | Skipped: {skipped}")
+    say(f"Elapsed: {runner._format_duration(time.monotonic() - start_time)}")
+    say(f"Summary: {summary_path}")
+    say(f"Job logs: {log_root}")
+    return 1 if failures else 0
 
 
 def main() -> int:
-    args = _parse_args()
+    args = arguments()
     project_root = Path(__file__).resolve().parent
-    u_config = runner._load_u_config(project_root)
+    runner.cfg = cfg2
+    if args.progress_seconds < 0:
+        raise ValueError("--progress-seconds must be nonnegative")
 
-    known_profiles = set(cfg2.EXECUTION_PROFILES)
-    known_experiments = {str(item["name"]) for item in cfg2.EXPERIMENTS}
-    if args.profile:
-        unknown = set(args.profile) - known_profiles
-        if unknown:
-            raise ValueError(f"Unknown --profile value(s): {sorted(unknown)}")
-    if args.experiment:
-        unknown = set(args.experiment) - known_experiments
-        if unknown:
-            raise ValueError(f"Unknown --experiment value(s): {sorted(unknown)}")
-
-    jobs = runner._build_jobs(
-        project_root,
-        profile_filter=set(args.profile) if args.profile else None,
-        experiment_filter=set(args.experiment) if args.experiment else None,
-        method_filter=set(args.method) if args.method else None,
-    )
-    if not jobs:
-        raise ValueError("The selected filters generated zero jobs.")
-
-    if args.limit is not None:
-        if args.limit < 1:
-            raise ValueError("--limit must be positive.")
-        jobs = jobs[: args.limit]
-        jobs = [
-            runner.Job(**{**asdict(job), "index": i + 1, "total": len(jobs)})
-            for i, job in enumerate(jobs)
-        ]
-
-    warnings = runner._validate_jobs(jobs, u_config)
-    _validate_plan(jobs)
-
-    dry_run = cfg2.DRY_RUN
-    if args.dry_run:
-        dry_run = True
-    elif args.run:
-        dry_run = False
-
-    stream_output = bool(cfg2.STREAM_OUTPUT or args.stream_output)
-    progress_seconds = (
-        float(args.progress_seconds)
-        if args.progress_seconds is not None
-        else float(cfg2.PROGRESS_UPDATE_SECONDS)
-    )
-    if progress_seconds < 0:
-        raise ValueError("--progress-seconds must be zero or positive.")
-
-    print("=" * 96)
-    print("ZNE GPU2 MULTI-GPU BATCH PLAN")
-    print(f"Project root     : {project_root}")
-    print(f"Jobs             : {len(jobs)}")
-    print(f"Mode             : {'DRY RUN' if dry_run else 'EXECUTE'}")
-    print(f"Physical GPUs    : {', '.join(map(str, GPU_IDS))}")
-    print(f"Parallel workers : {len(GPU_IDS)}")
-    print("Job timeout      : disabled permanently")
-    print(f"Reports          : {cfg2.REPORT_DIRECTORY}")
-    print(f"Logs             : {cfg2.LOG_DIRECTORY}")
-    print(
-        "Barrier order    : phase -> Round -> qubit; "
-        "circuits/profile/method jobs parallel inside each qubit barrier"
-    )
-    print("=" * 96)
-
+    jobs = runner._build_jobs(project_root, profile_filter=None,
+                              experiment_filter=None, method_filter=None)
+    validate_plan(jobs)
+    warnings = runner._validate_jobs(jobs, runner._load_u_config(project_root))
     for warning in dict.fromkeys(warnings):
-        print("WARNING:", warning)
-    if warnings:
-        print()
+        say("WARNING: " + warning)
 
-    barriers = _group_by_barrier(jobs)
-
-    if dry_run:
-        for key, members in barriers:
-            print("\n--- BARRIER | " + _barrier_label(key, members) + " ---")
-            for position, job in enumerate(members):
-                gpu_id = GPU_IDS[position % len(GPU_IDS)]
-                print(
-                    f"[{job.index:04d}/{job.total:04d}] PLAN | GPU~{gpu_id} | "
-                    f"round={job.depth_round + 1} | {runner._job_description(job)}"
-                )
-                if args.show_commands:
-                    print("    command:", " ".join(runner._command(job)))
-        print("\nDry run complete. No simulations were executed.")
+    completed, pending = existing_or_pending(jobs)
+    if args.dry_run or not args.run:
+        print_plan(jobs, completed, pending, show_commands=args.show_commands)
         return 0
 
-    if stream_output and len(GPU_IDS) > 1:
-        print(
-            "WARNING: --stream-output with multiple GPUs will interleave child output; "
-            "per-job log files remain authoritative."
+    # Fail safely if the user's original GPU2 8-GPU batch is still running.
+    if not (project_root / cfg2.REPORT_DIRECTORY).is_dir():
+        raise RuntimeError(
+            "STOP: zne_reports_ver2 does not exist on this GPU. Transfer the "
+            "previous report files BEFORE running so they can be skipped."
+        )
+    if not list((project_root / cfg2.REPORT_DIRECTORY).glob("*.json")):
+        raise RuntimeError(
+            "STOP: zne_reports_ver2 is empty on this GPU. Check that previously "
+            "completed reports were copied from the Mac."
         )
 
-    _safe_print("Preflight: checking each configured GPU ...")
-    _preflight_each_gpu(project_root)
-    _safe_print("Preflight: all GPUs PASS\n")
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_root = (project_root / cfg2.LOG_DIRECTORY / timestamp).resolve()
-    log_root.mkdir(parents=True, exist_ok=True)
-    summary_path = log_root / "batch_summary.json"
-
-    if args.no_git:
-        cfg2.GIT["enabled"] = False
-
-    results: list[dict[str, Any]] = []
-    successes = 0
-    failures = 0
-    skipped = 0
-    batch_start = time.monotonic()
-    stop_after_barrier = False
-
-    for barrier_index, (key, members) in enumerate(barriers, start=1):
-        _safe_print(
-            "\n" + "=" * 96 +
-            f"\nBARRIER {barrier_index}/{len(barriers)} | {_barrier_label(key, members)}" +
-            "\n" + "=" * 96
-        )
-
-        pending = deque()
-        for job in members:
-            job.report_directory.mkdir(parents=True, exist_ok=True)
-            if (
-                cfg2.SKIP_EXISTING
-                and not args.rerun_existing
-                and runner._valid_existing_report(job)
-            ):
-                skipped += 1
-                _safe_print(
-                    f"[{job.index:04d}/{job.total:04d}] SKIP | "
-                    f"{runner._job_description(job)}"
-                )
-                results.append(
-                    runner._job_record(
-                        job,
-                        status="skipped",
-                        gpu_id=None,
-                        runtime_seconds=0.0,
-                        report_path=str(job.report_path),
-                    )
-                )
-            else:
-                pending.append(job)
-
-        _write_summary(summary_path, results)
-
-        if not pending:
-            _safe_print("Barrier already complete from existing valid reports.")
-            continue
-
-        available_gpus = deque(GPU_IDS)
-        active: dict[Future, tuple[Any, int]] = {}
-        scheduling_open = True
-
-        with ThreadPoolExecutor(max_workers=len(GPU_IDS)) as executor:
-            while pending or active:
-                while scheduling_open and pending and available_gpus:
-                    job = pending.popleft()
-                    gpu_id = available_gpus.popleft()
-                    _safe_print(
-                        f"[{job.index:04d}/{job.total:04d}] START | GPU={gpu_id} | "
-                        f"{runner._job_description(job)}"
-                    )
-                    future = executor.submit(
-                        _run_one_job,
-                        job,
-                        gpu_id,
-                        project_root=project_root,
-                        log_root=log_root,
-                        stream_output=stream_output,
-                        progress_seconds=progress_seconds,
-                        batch_start=batch_start,
-                    )
-                    active[future] = (job, gpu_id)
-
-                if not active:
-                    break
-
-                done, _ = wait(set(active), return_when=FIRST_COMPLETED)
-                for future in done:
-                    job, gpu_id = active.pop(future)
-                    available_gpus.append(gpu_id)
-                    try:
-                        outcome = future.result()
-                    except Exception as exc:
-                        failures += 1
-                        _safe_print(
-                            f"[{job.index:04d}/{job.total:04d}] FAILED | GPU={gpu_id} | "
-                            f"runner exception: {exc!r}"
-                        )
-                        results.append(
-                            runner._job_record(
-                                job,
-                                status="failed",
-                                gpu_id=gpu_id,
-                                runner_exception=repr(exc),
-                                report_path=str(job.report_path),
-                            )
-                        )
-                        if cfg2.STOP_ON_FAILURE:
-                            scheduling_open = False
-                            stop_after_barrier = True
-                        _write_summary(summary_path, results)
-                        continue
-
-                    runtime = float(outcome["runtime"])
-                    returncode = int(outcome["returncode"])
-                    report_valid = bool(outcome["report_valid"])
-                    log_path = Path(outcome["log_path"])
-
-                    if report_valid:
-                        successes += 1
-                        _safe_print(
-                            f"[{job.index:04d}/{job.total:04d}] SUCCESS | GPU={gpu_id} | "
-                            f"job={runner._format_duration(runtime)} | "
-                            f"{runner._job_description(job)}"
-                        )
-                        status = "success"
-                    else:
-                        failures += 1
-                        # No timeout path exists in this runner.
-                        _safe_print(
-                            f"[{job.index:04d}/{job.total:04d}] FAILED | GPU={gpu_id} | "
-                            f"rc={returncode} | job={runner._format_duration(runtime)} | "
-                            f"{runner._job_description(job)}"
-                        )
-                        _safe_print(f"    log: {log_path}")
-                        status = "failed"
-                        if cfg2.STOP_ON_FAILURE:
-                            scheduling_open = False
-                            stop_after_barrier = True
-
-                    results.append(
-                        runner._job_record(
-                            job,
-                            status=status,
-                            gpu_id=gpu_id,
-                            returncode=returncode,
-                            runtime_seconds=runtime,
-                            report_path=str(job.report_path),
-                            log_path=str(log_path),
-                        )
-                    )
-                    _write_summary(summary_path, results)
-
-        if pending and not scheduling_open:
-            _safe_print(
-                f"STOP_ON_FAILURE=True: {len(pending)} job(s) in this barrier were not started."
+    lock = acquire_run_lock(project_root)
+    try:
+        other_jobs = active_project_jobs(project_root)
+        if other_jobs:
+            raise RuntimeError(
+                "STOP: another ZNE batch or worker is still running in this "
+                "project. No new GPU experiment was started:\n  "
+                + "\n  ".join(other_jobs[:20])
             )
-
-        # Strict qubit barrier: the next qubit count starts only here, after every
-        # active job in this group has returned.
-        _safe_print(
-            f"BARRIER COMPLETE | {_barrier_label(key, members)} | "
-            f"S={successes} F={failures} K={skipped}"
-        )
-
-        if stop_after_barrier:
-            break
-
-    if cfg2.GIT.get("enabled", False):
-        runner._git_checkpoint(project_root, f"Add GPU2 multi-GPU results {timestamp}")
-
-    elapsed = time.monotonic() - batch_start
-    processed = successes + failures + skipped
-    print("\n" + "=" * 96)
-    print("GPU2 MULTI-GPU BATCH COMPLETE")
-    print(f"Processed        : {processed}/{len(jobs)}")
-    print(f"Succeeded        : {successes}")
-    print(f"Skipped          : {skipped}")
-    print(f"Failed           : {failures}")
-    print(f"Elapsed          : {runner._format_duration(elapsed)}")
-    print(f"Summary          : {summary_path}")
-    print(f"Per-job logs     : {log_root}")
-    print("=" * 96)
-    return 1 if failures else 0
+        say("Preflight: checking all requested GPUs...")
+        preflight_gpu(project_root)
+        # Re-read matching reports immediately before dispatching jobs.
+        completed, pending = existing_or_pending(jobs)
+        return run_batch(project_root, jobs, completed, pending,
+                         progress_seconds=args.progress_seconds)
+    finally:
+        lock.close()
 
 
 if __name__ == "__main__":

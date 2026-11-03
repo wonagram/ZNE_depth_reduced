@@ -1,0 +1,1374 @@
+{
+  "dry_run": false,
+  "report_directory": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4",
+  "output_root": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4",
+  "reports_scanned": 109,
+  "plots_planned_or_generated": 13,
+  "groups_skipped": 0,
+  "generated": [
+    {
+      "comparison": "methods_across_noise",
+      "basename": "1q_random_type_90_GPU_methods_acrossnoise",
+      "num_qubits": 1,
+      "unitary": "random_type",
+      "depth": 90,
+      "platform_tag": "GPU",
+      "complete": true,
+      "ideal_expectation": -0.6941827965434847,
+      "available_combinations": [
+        [
+          "circuit_folding",
+          "increasing_pauli"
+        ],
+        [
+          "circuit_folding",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "circuit_folding",
+          "small_constant_depolarizing_0p2pct"
+        ],
+        [
+          "global",
+          "increasing_pauli"
+        ],
+        [
+          "global",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "global",
+          "small_constant_depolarizing_0p2pct"
+        ],
+        [
+          "local",
+          "increasing_pauli"
+        ],
+        [
+          "local",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "local",
+          "small_constant_depolarizing_0p2pct"
+        ]
+      ],
+      "missing_combinations": [],
+      "input_reports": [
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/1q_random_type_90_GPU_small_constant_depolarizing_0p2pct_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/1q_random_type_90_GPU_small_constant_depolarizing_0p2pct_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/1q_random_type_90_GPU_small_constant_depolarizing_0p2pct_local.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/1q_random_type_90_GPU_increasing_pauli_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/1q_random_type_90_GPU_increasing_pauli_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/1q_random_type_90_GPU_increasing_pauli_local.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/1q_random_type_90_GPU_increasing_pauli_amplitude_damping_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/1q_random_type_90_GPU_increasing_pauli_amplitude_damping_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/1q_random_type_90_GPU_increasing_pauli_amplitude_damping_local.json"
+      ],
+      "output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/1q_random_type_90_GPU_methods_acrossnoise/1q_random_type_90_GPU_methods_acrossnoise.png",
+      "no_legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/1q_random_type_90_GPU_methods_acrossnoise/1q_random_type_90_GPU_methods_acrossnoise_no_legend.png",
+      "legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/1q_random_type_90_GPU_methods_acrossnoise/1q_random_type_90_GPU_methods_acrossnoise_legend.png"
+    },
+    {
+      "comparison": "methods_across_noise",
+      "basename": "2q_hea_crz_90_GPU_methods_acrossnoise",
+      "num_qubits": 2,
+      "unitary": "hea_crz",
+      "depth": 90,
+      "platform_tag": "GPU",
+      "complete": true,
+      "ideal_expectation": -0.03731237233389742,
+      "available_combinations": [
+        [
+          "circuit_folding",
+          "increasing_pauli"
+        ],
+        [
+          "circuit_folding",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "circuit_folding",
+          "small_constant_depolarizing_0p2pct"
+        ],
+        [
+          "global",
+          "increasing_pauli"
+        ],
+        [
+          "global",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "global",
+          "small_constant_depolarizing_0p2pct"
+        ],
+        [
+          "local",
+          "increasing_pauli"
+        ],
+        [
+          "local",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "local",
+          "small_constant_depolarizing_0p2pct"
+        ]
+      ],
+      "missing_combinations": [],
+      "input_reports": [
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_hea_crz_90_GPU_small_constant_depolarizing_0p2pct_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_hea_crz_90_GPU_small_constant_depolarizing_0p2pct_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_hea_crz_90_GPU_small_constant_depolarizing_0p2pct_local.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_hea_crz_90_GPU_increasing_pauli_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_hea_crz_90_GPU_increasing_pauli_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_hea_crz_90_GPU_increasing_pauli_local.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_hea_crz_90_GPU_increasing_pauli_amplitude_damping_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_hea_crz_90_GPU_increasing_pauli_amplitude_damping_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_hea_crz_90_GPU_increasing_pauli_amplitude_damping_local.json"
+      ],
+      "output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/2q_hea_crz_90_GPU_methods_acrossnoise/2q_hea_crz_90_GPU_methods_acrossnoise.png",
+      "no_legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/2q_hea_crz_90_GPU_methods_acrossnoise/2q_hea_crz_90_GPU_methods_acrossnoise_no_legend.png",
+      "legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/2q_hea_crz_90_GPU_methods_acrossnoise/2q_hea_crz_90_GPU_methods_acrossnoise_legend.png"
+    },
+    {
+      "comparison": "methods_across_noise",
+      "basename": "2q_hea_cz_90_GPU_methods_acrossnoise",
+      "num_qubits": 2,
+      "unitary": "hea_cz",
+      "depth": 90,
+      "platform_tag": "GPU",
+      "complete": true,
+      "ideal_expectation": -0.12017871079658143,
+      "available_combinations": [
+        [
+          "circuit_folding",
+          "increasing_pauli"
+        ],
+        [
+          "circuit_folding",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "circuit_folding",
+          "small_constant_depolarizing_0p2pct"
+        ],
+        [
+          "global",
+          "increasing_pauli"
+        ],
+        [
+          "global",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "global",
+          "small_constant_depolarizing_0p2pct"
+        ],
+        [
+          "local",
+          "increasing_pauli"
+        ],
+        [
+          "local",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "local",
+          "small_constant_depolarizing_0p2pct"
+        ]
+      ],
+      "missing_combinations": [],
+      "input_reports": [
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_hea_cz_90_GPU_small_constant_depolarizing_0p2pct_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_hea_cz_90_GPU_small_constant_depolarizing_0p2pct_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_hea_cz_90_GPU_small_constant_depolarizing_0p2pct_local.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_hea_cz_90_GPU_increasing_pauli_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_hea_cz_90_GPU_increasing_pauli_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_hea_cz_90_GPU_increasing_pauli_local.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_hea_cz_90_GPU_increasing_pauli_amplitude_damping_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_hea_cz_90_GPU_increasing_pauli_amplitude_damping_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_hea_cz_90_GPU_increasing_pauli_amplitude_damping_local.json"
+      ],
+      "output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/2q_hea_cz_90_GPU_methods_acrossnoise/2q_hea_cz_90_GPU_methods_acrossnoise.png",
+      "no_legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/2q_hea_cz_90_GPU_methods_acrossnoise/2q_hea_cz_90_GPU_methods_acrossnoise_no_legend.png",
+      "legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/2q_hea_cz_90_GPU_methods_acrossnoise/2q_hea_cz_90_GPU_methods_acrossnoise_legend.png"
+    },
+    {
+      "comparison": "methods_across_noise",
+      "basename": "2q_hea_rzz_90_GPU_methods_acrossnoise",
+      "num_qubits": 2,
+      "unitary": "hea_rzz",
+      "depth": 90,
+      "platform_tag": "GPU",
+      "complete": true,
+      "ideal_expectation": 0.03163717756385025,
+      "available_combinations": [
+        [
+          "circuit_folding",
+          "increasing_pauli"
+        ],
+        [
+          "circuit_folding",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "circuit_folding",
+          "small_constant_depolarizing_0p2pct"
+        ],
+        [
+          "global",
+          "increasing_pauli"
+        ],
+        [
+          "global",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "global",
+          "small_constant_depolarizing_0p2pct"
+        ],
+        [
+          "local",
+          "increasing_pauli"
+        ],
+        [
+          "local",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "local",
+          "small_constant_depolarizing_0p2pct"
+        ]
+      ],
+      "missing_combinations": [],
+      "input_reports": [
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_hea_rzz_90_GPU_small_constant_depolarizing_0p2pct_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_hea_rzz_90_GPU_small_constant_depolarizing_0p2pct_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_hea_rzz_90_GPU_small_constant_depolarizing_0p2pct_local.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_hea_rzz_90_GPU_increasing_pauli_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_hea_rzz_90_GPU_increasing_pauli_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_hea_rzz_90_GPU_increasing_pauli_local.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_hea_rzz_90_GPU_increasing_pauli_amplitude_damping_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_hea_rzz_90_GPU_increasing_pauli_amplitude_damping_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_hea_rzz_90_GPU_increasing_pauli_amplitude_damping_local.json"
+      ],
+      "output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/2q_hea_rzz_90_GPU_methods_acrossnoise/2q_hea_rzz_90_GPU_methods_acrossnoise.png",
+      "no_legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/2q_hea_rzz_90_GPU_methods_acrossnoise/2q_hea_rzz_90_GPU_methods_acrossnoise_no_legend.png",
+      "legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/2q_hea_rzz_90_GPU_methods_acrossnoise/2q_hea_rzz_90_GPU_methods_acrossnoise_legend.png"
+    },
+    {
+      "comparison": "methods_across_noise",
+      "basename": "2q_random_type_72_GPU_methods_acrossnoise",
+      "num_qubits": 2,
+      "unitary": "random_type",
+      "depth": 72,
+      "platform_tag": "GPU",
+      "complete": true,
+      "ideal_expectation": 0.24109663930256633,
+      "available_combinations": [
+        [
+          "circuit_folding",
+          "increasing_pauli"
+        ],
+        [
+          "circuit_folding",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "circuit_folding",
+          "small_constant_depolarizing_0p2pct"
+        ],
+        [
+          "global",
+          "increasing_pauli"
+        ],
+        [
+          "global",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "global",
+          "small_constant_depolarizing_0p2pct"
+        ],
+        [
+          "local",
+          "increasing_pauli"
+        ],
+        [
+          "local",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "local",
+          "small_constant_depolarizing_0p2pct"
+        ]
+      ],
+      "missing_combinations": [],
+      "input_reports": [
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_random_type_72_GPU_small_constant_depolarizing_0p2pct_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_random_type_72_GPU_small_constant_depolarizing_0p2pct_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_random_type_72_GPU_small_constant_depolarizing_0p2pct_local.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_random_type_72_GPU_increasing_pauli_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_random_type_72_GPU_increasing_pauli_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_random_type_72_GPU_increasing_pauli_local.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_random_type_72_GPU_increasing_pauli_amplitude_damping_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_random_type_72_GPU_increasing_pauli_amplitude_damping_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/2q_random_type_72_GPU_increasing_pauli_amplitude_damping_local.json"
+      ],
+      "output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/2q_random_type_72_GPU_methods_acrossnoise/2q_random_type_72_GPU_methods_acrossnoise.png",
+      "no_legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/2q_random_type_72_GPU_methods_acrossnoise/2q_random_type_72_GPU_methods_acrossnoise_no_legend.png",
+      "legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/2q_random_type_72_GPU_methods_acrossnoise/2q_random_type_72_GPU_methods_acrossnoise_legend.png"
+    },
+    {
+      "comparison": "methods_across_noise",
+      "basename": "3q_hea_crz_90_GPU_methods_acrossnoise",
+      "num_qubits": 3,
+      "unitary": "hea_crz",
+      "depth": 90,
+      "platform_tag": "GPU",
+      "complete": true,
+      "ideal_expectation": 0.037719404238013066,
+      "available_combinations": [
+        [
+          "circuit_folding",
+          "increasing_pauli"
+        ],
+        [
+          "circuit_folding",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "circuit_folding",
+          "small_constant_depolarizing_0p2pct"
+        ],
+        [
+          "global",
+          "increasing_pauli"
+        ],
+        [
+          "global",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "global",
+          "small_constant_depolarizing_0p2pct"
+        ],
+        [
+          "local",
+          "increasing_pauli"
+        ],
+        [
+          "local",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "local",
+          "small_constant_depolarizing_0p2pct"
+        ]
+      ],
+      "missing_combinations": [],
+      "input_reports": [
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_hea_crz_90_GPU_small_constant_depolarizing_0p2pct_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_hea_crz_90_GPU_small_constant_depolarizing_0p2pct_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_hea_crz_90_GPU_small_constant_depolarizing_0p2pct_local.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_hea_crz_90_GPU_increasing_pauli_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_hea_crz_90_GPU_increasing_pauli_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_hea_crz_90_GPU_increasing_pauli_local.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_hea_crz_90_GPU_increasing_pauli_amplitude_damping_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_hea_crz_90_GPU_increasing_pauli_amplitude_damping_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_hea_crz_90_GPU_increasing_pauli_amplitude_damping_local.json"
+      ],
+      "output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/3q_hea_crz_90_GPU_methods_acrossnoise/3q_hea_crz_90_GPU_methods_acrossnoise.png",
+      "no_legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/3q_hea_crz_90_GPU_methods_acrossnoise/3q_hea_crz_90_GPU_methods_acrossnoise_no_legend.png",
+      "legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/3q_hea_crz_90_GPU_methods_acrossnoise/3q_hea_crz_90_GPU_methods_acrossnoise_legend.png"
+    },
+    {
+      "comparison": "methods_across_noise",
+      "basename": "3q_hea_cz_96_GPU_methods_acrossnoise",
+      "num_qubits": 3,
+      "unitary": "hea_cz",
+      "depth": 96,
+      "platform_tag": "GPU",
+      "complete": true,
+      "ideal_expectation": 0.444562363349067,
+      "available_combinations": [
+        [
+          "circuit_folding",
+          "increasing_pauli"
+        ],
+        [
+          "circuit_folding",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "circuit_folding",
+          "small_constant_depolarizing_0p2pct"
+        ],
+        [
+          "global",
+          "increasing_pauli"
+        ],
+        [
+          "global",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "global",
+          "small_constant_depolarizing_0p2pct"
+        ],
+        [
+          "local",
+          "increasing_pauli"
+        ],
+        [
+          "local",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "local",
+          "small_constant_depolarizing_0p2pct"
+        ]
+      ],
+      "missing_combinations": [],
+      "input_reports": [
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_hea_cz_96_GPU_small_constant_depolarizing_0p2pct_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_hea_cz_96_GPU_small_constant_depolarizing_0p2pct_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_hea_cz_96_GPU_small_constant_depolarizing_0p2pct_local.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_hea_cz_96_GPU_increasing_pauli_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_hea_cz_96_GPU_increasing_pauli_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_hea_cz_96_GPU_increasing_pauli_local.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_hea_cz_96_GPU_increasing_pauli_amplitude_damping_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_hea_cz_96_GPU_increasing_pauli_amplitude_damping_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_hea_cz_96_GPU_increasing_pauli_amplitude_damping_local.json"
+      ],
+      "output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/3q_hea_cz_96_GPU_methods_acrossnoise/3q_hea_cz_96_GPU_methods_acrossnoise.png",
+      "no_legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/3q_hea_cz_96_GPU_methods_acrossnoise/3q_hea_cz_96_GPU_methods_acrossnoise_no_legend.png",
+      "legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/3q_hea_cz_96_GPU_methods_acrossnoise/3q_hea_cz_96_GPU_methods_acrossnoise_legend.png"
+    },
+    {
+      "comparison": "methods_across_noise",
+      "basename": "3q_hea_rzz_96_GPU_methods_acrossnoise",
+      "num_qubits": 3,
+      "unitary": "hea_rzz",
+      "depth": 96,
+      "platform_tag": "GPU",
+      "complete": true,
+      "ideal_expectation": 0.0946267056428696,
+      "available_combinations": [
+        [
+          "circuit_folding",
+          "increasing_pauli"
+        ],
+        [
+          "circuit_folding",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "circuit_folding",
+          "small_constant_depolarizing_0p2pct"
+        ],
+        [
+          "global",
+          "increasing_pauli"
+        ],
+        [
+          "global",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "global",
+          "small_constant_depolarizing_0p2pct"
+        ],
+        [
+          "local",
+          "increasing_pauli"
+        ],
+        [
+          "local",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "local",
+          "small_constant_depolarizing_0p2pct"
+        ]
+      ],
+      "missing_combinations": [],
+      "input_reports": [
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_hea_rzz_96_GPU_small_constant_depolarizing_0p2pct_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_hea_rzz_96_GPU_small_constant_depolarizing_0p2pct_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_hea_rzz_96_GPU_small_constant_depolarizing_0p2pct_local.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_hea_rzz_96_GPU_increasing_pauli_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_hea_rzz_96_GPU_increasing_pauli_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_hea_rzz_96_GPU_increasing_pauli_local.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_hea_rzz_96_GPU_increasing_pauli_amplitude_damping_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_hea_rzz_96_GPU_increasing_pauli_amplitude_damping_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_hea_rzz_96_GPU_increasing_pauli_amplitude_damping_local.json"
+      ],
+      "output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/3q_hea_rzz_96_GPU_methods_acrossnoise/3q_hea_rzz_96_GPU_methods_acrossnoise.png",
+      "no_legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/3q_hea_rzz_96_GPU_methods_acrossnoise/3q_hea_rzz_96_GPU_methods_acrossnoise_no_legend.png",
+      "legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/3q_hea_rzz_96_GPU_methods_acrossnoise/3q_hea_rzz_96_GPU_methods_acrossnoise_legend.png"
+    },
+    {
+      "comparison": "methods_across_noise",
+      "basename": "3q_random_type_81_GPU_methods_acrossnoise",
+      "num_qubits": 3,
+      "unitary": "random_type",
+      "depth": 81,
+      "platform_tag": "GPU",
+      "complete": true,
+      "ideal_expectation": 0.10740769041591818,
+      "available_combinations": [
+        [
+          "circuit_folding",
+          "increasing_pauli"
+        ],
+        [
+          "circuit_folding",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "circuit_folding",
+          "small_constant_depolarizing_0p2pct"
+        ],
+        [
+          "global",
+          "increasing_pauli"
+        ],
+        [
+          "global",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "global",
+          "small_constant_depolarizing_0p2pct"
+        ],
+        [
+          "local",
+          "increasing_pauli"
+        ],
+        [
+          "local",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "local",
+          "small_constant_depolarizing_0p2pct"
+        ]
+      ],
+      "missing_combinations": [],
+      "input_reports": [
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_random_type_81_GPU_small_constant_depolarizing_0p2pct_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_random_type_81_GPU_small_constant_depolarizing_0p2pct_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_random_type_81_GPU_small_constant_depolarizing_0p2pct_local.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_random_type_81_GPU_increasing_pauli_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_random_type_81_GPU_increasing_pauli_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_random_type_81_GPU_increasing_pauli_local.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_random_type_81_GPU_increasing_pauli_amplitude_damping_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_random_type_81_GPU_increasing_pauli_amplitude_damping_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/3q_random_type_81_GPU_increasing_pauli_amplitude_damping_local.json"
+      ],
+      "output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/3q_random_type_81_GPU_methods_acrossnoise/3q_random_type_81_GPU_methods_acrossnoise.png",
+      "no_legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/3q_random_type_81_GPU_methods_acrossnoise/3q_random_type_81_GPU_methods_acrossnoise_no_legend.png",
+      "legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/3q_random_type_81_GPU_methods_acrossnoise/3q_random_type_81_GPU_methods_acrossnoise_legend.png"
+    },
+    {
+      "comparison": "methods_across_noise",
+      "basename": "4q_hea_crz_90_GPU_methods_acrossnoise",
+      "num_qubits": 4,
+      "unitary": "hea_crz",
+      "depth": 90,
+      "platform_tag": "GPU",
+      "complete": false,
+      "ideal_expectation": -0.19599745156249443,
+      "available_combinations": [
+        [
+          "circuit_folding",
+          "increasing_pauli"
+        ],
+        [
+          "circuit_folding",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "circuit_folding",
+          "small_constant_depolarizing_0p2pct"
+        ],
+        [
+          "global",
+          "increasing_pauli"
+        ],
+        [
+          "global",
+          "small_constant_depolarizing_0p2pct"
+        ],
+        [
+          "local",
+          "increasing_pauli"
+        ],
+        [
+          "local",
+          "small_constant_depolarizing_0p2pct"
+        ]
+      ],
+      "missing_combinations": [
+        [
+          "global",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "local",
+          "increasing_pauli_amplitude_damping"
+        ]
+      ],
+      "input_reports": [
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/4q_hea_crz_90_GPU_small_constant_depolarizing_0p2pct_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/4q_hea_crz_90_GPU_small_constant_depolarizing_0p2pct_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/4q_hea_crz_90_GPU_small_constant_depolarizing_0p2pct_local.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/4q_hea_crz_90_GPU_increasing_pauli_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/4q_hea_crz_90_GPU_increasing_pauli_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/4q_hea_crz_90_GPU_increasing_pauli_local.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/4q_hea_crz_90_GPU_increasing_pauli_amplitude_damping_circuit_folding.json"
+      ],
+      "output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/4q_hea_crz_90_GPU_methods_acrossnoise/4q_hea_crz_90_GPU_methods_acrossnoise.png",
+      "no_legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/4q_hea_crz_90_GPU_methods_acrossnoise/4q_hea_crz_90_GPU_methods_acrossnoise_no_legend.png",
+      "legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/4q_hea_crz_90_GPU_methods_acrossnoise/4q_hea_crz_90_GPU_methods_acrossnoise_legend.png"
+    },
+    {
+      "comparison": "methods_across_noise",
+      "basename": "4q_hea_cz_96_GPU_methods_acrossnoise",
+      "num_qubits": 4,
+      "unitary": "hea_cz",
+      "depth": 96,
+      "platform_tag": "GPU",
+      "complete": false,
+      "ideal_expectation": 0.2387563005648017,
+      "available_combinations": [
+        [
+          "circuit_folding",
+          "increasing_pauli"
+        ],
+        [
+          "circuit_folding",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "circuit_folding",
+          "small_constant_depolarizing_0p2pct"
+        ],
+        [
+          "global",
+          "increasing_pauli"
+        ],
+        [
+          "global",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "global",
+          "small_constant_depolarizing_0p2pct"
+        ],
+        [
+          "local",
+          "increasing_pauli"
+        ],
+        [
+          "local",
+          "small_constant_depolarizing_0p2pct"
+        ]
+      ],
+      "missing_combinations": [
+        [
+          "local",
+          "increasing_pauli_amplitude_damping"
+        ]
+      ],
+      "input_reports": [
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/4q_hea_cz_96_GPU_small_constant_depolarizing_0p2pct_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/4q_hea_cz_96_GPU_small_constant_depolarizing_0p2pct_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/4q_hea_cz_96_GPU_small_constant_depolarizing_0p2pct_local.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/4q_hea_cz_96_GPU_increasing_pauli_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/4q_hea_cz_96_GPU_increasing_pauli_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/4q_hea_cz_96_GPU_increasing_pauli_local.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/4q_hea_cz_96_GPU_increasing_pauli_amplitude_damping_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/4q_hea_cz_96_GPU_increasing_pauli_amplitude_damping_global.json"
+      ],
+      "output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/4q_hea_cz_96_GPU_methods_acrossnoise/4q_hea_cz_96_GPU_methods_acrossnoise.png",
+      "no_legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/4q_hea_cz_96_GPU_methods_acrossnoise/4q_hea_cz_96_GPU_methods_acrossnoise_no_legend.png",
+      "legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/4q_hea_cz_96_GPU_methods_acrossnoise/4q_hea_cz_96_GPU_methods_acrossnoise_legend.png"
+    },
+    {
+      "comparison": "methods_across_noise",
+      "basename": "4q_hea_rzz_96_GPU_methods_acrossnoise",
+      "num_qubits": 4,
+      "unitary": "hea_rzz",
+      "depth": 96,
+      "platform_tag": "GPU",
+      "complete": false,
+      "ideal_expectation": 0.11737440688676341,
+      "available_combinations": [
+        [
+          "circuit_folding",
+          "increasing_pauli"
+        ],
+        [
+          "circuit_folding",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "circuit_folding",
+          "small_constant_depolarizing_0p2pct"
+        ],
+        [
+          "global",
+          "increasing_pauli"
+        ],
+        [
+          "global",
+          "small_constant_depolarizing_0p2pct"
+        ]
+      ],
+      "missing_combinations": [
+        [
+          "global",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "local",
+          "increasing_pauli"
+        ],
+        [
+          "local",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "local",
+          "small_constant_depolarizing_0p2pct"
+        ]
+      ],
+      "input_reports": [
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/4q_hea_rzz_96_GPU_small_constant_depolarizing_0p2pct_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/4q_hea_rzz_96_GPU_small_constant_depolarizing_0p2pct_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/4q_hea_rzz_96_GPU_increasing_pauli_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/4q_hea_rzz_96_GPU_increasing_pauli_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/4q_hea_rzz_96_GPU_increasing_pauli_amplitude_damping_circuit_folding.json"
+      ],
+      "output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/4q_hea_rzz_96_GPU_methods_acrossnoise/4q_hea_rzz_96_GPU_methods_acrossnoise.png",
+      "no_legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/4q_hea_rzz_96_GPU_methods_acrossnoise/4q_hea_rzz_96_GPU_methods_acrossnoise_no_legend.png",
+      "legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/4q_hea_rzz_96_GPU_methods_acrossnoise/4q_hea_rzz_96_GPU_methods_acrossnoise_legend.png"
+    },
+    {
+      "comparison": "methods_across_noise",
+      "basename": "4q_random_type_96_GPU_methods_acrossnoise",
+      "num_qubits": 4,
+      "unitary": "random_type",
+      "depth": 96,
+      "platform_tag": "GPU",
+      "complete": false,
+      "ideal_expectation": 0.027548693439297493,
+      "available_combinations": [
+        [
+          "circuit_folding",
+          "increasing_pauli"
+        ],
+        [
+          "circuit_folding",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "circuit_folding",
+          "small_constant_depolarizing_0p2pct"
+        ],
+        [
+          "global",
+          "increasing_pauli"
+        ],
+        [
+          "global",
+          "increasing_pauli_amplitude_damping"
+        ],
+        [
+          "global",
+          "small_constant_depolarizing_0p2pct"
+        ],
+        [
+          "local",
+          "increasing_pauli"
+        ],
+        [
+          "local",
+          "small_constant_depolarizing_0p2pct"
+        ]
+      ],
+      "missing_combinations": [
+        [
+          "local",
+          "increasing_pauli_amplitude_damping"
+        ]
+      ],
+      "input_reports": [
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/4q_random_type_96_GPU_small_constant_depolarizing_0p2pct_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/4q_random_type_96_GPU_small_constant_depolarizing_0p2pct_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/4q_random_type_96_GPU_small_constant_depolarizing_0p2pct_local.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/4q_random_type_96_GPU_increasing_pauli_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/4q_random_type_96_GPU_increasing_pauli_global.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/4q_random_type_96_GPU_increasing_pauli_local.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/4q_random_type_96_GPU_increasing_pauli_amplitude_damping_circuit_folding.json",
+        "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_reports_gpu2_round3_round4/4q_random_type_96_GPU_increasing_pauli_amplitude_damping_global.json"
+      ],
+      "output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/4q_random_type_96_GPU_methods_acrossnoise/4q_random_type_96_GPU_methods_acrossnoise.png",
+      "no_legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/4q_random_type_96_GPU_methods_acrossnoise/4q_random_type_96_GPU_methods_acrossnoise_no_legend.png",
+      "legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/methods_across_noise/4q_random_type_96_GPU_methods_acrossnoise/4q_random_type_96_GPU_methods_acrossnoise_legend.png"
+    }
+  ],
+  "skipped": [],
+  "circuit_aggregate_generated": [
+    {
+      "group": [
+        2,
+        3,
+        "GPU"
+      ],
+      "basename": "2q_round3_GPU_acrosscircuit",
+      "num_qubits": 2,
+      "depth_round": 3,
+      "platform_tag": "GPU",
+      "circuit_order": [
+        "random_type",
+        "hea_cz",
+        "hea_crz",
+        "hea_rzz"
+      ],
+      "aggregate_methods": [
+        "circuit_folding",
+        "global",
+        "local"
+      ],
+      "depth_summary": "Random=72, HEA-CZ=90, HEA-CRZ=90, HEA-RZZ=90",
+      "std_ddof": 0,
+      "statistics": {
+        "small_constant_depolarizing_0p2pct|circuit_folding|exponential": {
+          "values_by_circuit": {
+            "random_type": 0.030951394131628562,
+            "hea_cz": 0.03660156279797305,
+            "hea_crz": 0.11216933643296886,
+            "hea_rzz": 0.03593064268691916
+          },
+          "mean": 0.05391323401237241,
+          "std": 0.03370492215894317,
+          "n": 4
+        },
+        "small_constant_depolarizing_0p2pct|circuit_folding|linear": {
+          "values_by_circuit": {
+            "random_type": 0.04955775041367752,
+            "hea_cz": 0.018922178092307507,
+            "hea_crz": 0.0126597109994359,
+            "hea_rzz": 0.036155376797566696
+          },
+          "mean": 0.029323754075746906,
+          "std": 0.014508349246253742,
+          "n": 4
+        },
+        "small_constant_depolarizing_0p2pct|global|exponential": {
+          "values_by_circuit": {
+            "random_type": 0.03101500763244225,
+            "hea_cz": 0.020770102276944424,
+            "hea_crz": 0.014863196124706768,
+            "hea_rzz": 0.031709152282555435
+          },
+          "mean": 0.02458936457916222,
+          "std": 0.007091639142806504,
+          "n": 4
+        },
+        "small_constant_depolarizing_0p2pct|global|linear": {
+          "values_by_circuit": {
+            "random_type": 0.031450240410599656,
+            "hea_cz": 0.0166576985993917,
+            "hea_crz": 0.014474457681416558,
+            "hea_rzz": 0.015141886705124466
+          },
+          "mean": 0.019431070849133095,
+          "std": 0.006984216944270058,
+          "n": 4
+        },
+        "small_constant_depolarizing_0p2pct|local|exponential": {
+          "values_by_circuit": {
+            "random_type": 0.06040690827638451,
+            "hea_cz": 0.007768158448575646,
+            "hea_crz": 0.03719660757277693,
+            "hea_rzz": 0.03164229580338266
+          },
+          "mean": 0.034253492525279934,
+          "std": 0.018714662374111967,
+          "n": 4
+        },
+        "small_constant_depolarizing_0p2pct|local|linear": {
+          "values_by_circuit": {
+            "random_type": 0.07069140538443769,
+            "hea_cz": 0.0036963849888592554,
+            "hea_crz": 0.019301908198876335,
+            "hea_rzz": 0.00360604824260137
+          },
+          "mean": 0.024323936703693663,
+          "std": 0.027522216999169076,
+          "n": 4
+        },
+        "increasing_pauli|circuit_folding|exponential": {
+          "values_by_circuit": {
+            "random_type": 0.10513323118912996,
+            "hea_cz": 0.07492595194975307,
+            "hea_crz": 0.007717176049887926,
+            "hea_rzz": 0.052646909132445505
+          },
+          "mean": 0.060105817080304116,
+          "std": 0.03552220937549064,
+          "n": 4
+        },
+        "increasing_pauli|circuit_folding|linear": {
+          "values_by_circuit": {
+            "random_type": 0.1457754854564125,
+            "hea_cz": 0.0034741780923075033,
+            "hea_crz": 0.007498622333897406,
+            "hea_rzz": 0.05549369097381191
+          },
+          "mean": 0.05306049421410733,
+          "std": 0.057307671744915384,
+          "n": 4
+        },
+        "increasing_pauli|global|exponential": {
+          "values_by_circuit": {
+            "random_type": 0.09484081572435024,
+            "hea_cz": 0.02034685017255719,
+            "hea_crz": 0.01323667722236059,
+            "hea_rzz": 0.8797803219678492
+          },
+          "mean": 0.2520511662717793,
+          "std": 0.3638262763700175,
+          "n": 4
+        },
+        "increasing_pauli|global|linear": {
+          "values_by_circuit": {
+            "random_type": 0.10389497725270488,
+            "hea_cz": 0.0007094154945680858,
+            "hea_crz": 0.014053873099594244,
+            "hea_rzz": 0.036385377009833596
+          },
+          "mean": 0.0387609107141752,
+          "std": 0.03970656047922741,
+          "n": 4
+        },
+        "increasing_pauli|local|exponential": {
+          "values_by_circuit": {
+            "random_type": 0.12433684320314907,
+            "hea_cz": 0.2446107425501693,
+            "hea_crz": 0.020929908678635208,
+            "hea_rzz": 0.03163717756385025
+          },
+          "mean": 0.10537866799895096,
+          "std": 0.08988100933072536,
+          "n": 4
+        },
+        "increasing_pauli|local|linear": {
+          "values_by_circuit": {
+            "random_type": 0.1390907621095839,
+            "hea_cz": 0.043852044129914766,
+            "hea_crz": 0.02543878583600713,
+            "hea_rzz": 0.011099220574602883
+          },
+          "mean": 0.054870203162527165,
+          "std": 0.04999152333241794,
+          "n": 4
+        },
+        "increasing_pauli_amplitude_damping|circuit_folding|exponential": {
+          "values_by_circuit": {
+            "random_type": 30.79157007633258,
+            "hea_cz": 0.06250855180347209,
+            "hea_crz": 0.03382678666588818,
+            "hea_rzz": 0.06514334218966528
+          },
+          "mean": 7.738262189247901,
+          "std": 13.309839181533162,
+          "n": 4
+        },
+        "increasing_pauli_amplitude_damping|circuit_folding|linear": {
+          "values_by_circuit": {
+            "random_type": 0.18036223759316464,
+            "hea_cz": 0.01656804412991468,
+            "hea_crz": 0.030464872333897407,
+            "hea_rzz": 0.06530097066729854
+          },
+          "mean": 0.07317403118106881,
+          "std": 0.06438091078721218,
+          "n": 4
+        },
+        "increasing_pauli_amplitude_damping|global|exponential": {
+          "values_by_circuit": {
+            "random_type": 0.053519184833712596,
+            "hea_cz": 0.06911375529756061,
+            "hea_crz": 0.05322872278849001,
+            "hea_rzz": 0.04801704970738296
+          },
+          "mean": 0.055969678156786544,
+          "std": 0.007898240579304773,
+          "n": 4
+        },
+        "increasing_pauli_amplitude_damping|global|linear": {
+          "values_by_circuit": {
+            "random_type": 0.17206284428871588,
+            "hea_cz": 0.05845723428651428,
+            "hea_crz": 0.047346369271110286,
+            "hea_rzz": 0.04801238532008295
+          },
+          "mean": 0.08146970829160585,
+          "std": 0.05248924884191609,
+          "n": 4
+        },
+        "increasing_pauli_amplitude_damping|local|exponential": {
+          "values_by_circuit": {
+            "random_type": 0.02877540348763752,
+            "hea_cz": 0.01453889812946943,
+            "hea_crz": 0.034008211550184735,
+            "hea_rzz": 0.1085962601262189
+          },
+          "mean": 0.04647969332337765,
+          "std": 0.03656385512086357,
+          "n": 4
+        },
+        "increasing_pauli_amplitude_damping|local|linear": {
+          "values_by_circuit": {
+            "random_type": 0.17084932936104585,
+            "hea_cz": 0.04212158435979976,
+            "hea_crz": 0.03891241452799024,
+            "hea_rzz": 0.04324549297603662
+          },
+          "mean": 0.07378220530621812,
+          "std": 0.05606428140947172,
+          "n": 4
+        }
+      },
+      "max_individual_absolute_error": 30.79157007633258,
+      "broken_bar_threshold": 4.0,
+      "broken_bar_generated": true,
+      "bar_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/across_circuit_statistics/2q_round3_GPU_acrosscircuit/2q_round3_GPU_acrosscircuit_mean_std_bar.png",
+      "bar_no_legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/across_circuit_statistics/2q_round3_GPU_acrosscircuit/2q_round3_GPU_acrosscircuit_mean_std_bar_no_legend.png",
+      "bar_legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/across_circuit_statistics/2q_round3_GPU_acrosscircuit/2q_round3_GPU_acrosscircuit_mean_std_bar_legend.png",
+      "broken_bar_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/across_circuit_statistics/2q_round3_GPU_acrosscircuit/2q_round3_GPU_acrosscircuit_mean_std_bar_broken.png",
+      "broken_bar_no_legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/across_circuit_statistics/2q_round3_GPU_acrosscircuit/2q_round3_GPU_acrosscircuit_mean_std_bar_broken_no_legend.png",
+      "broken_bar_legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/across_circuit_statistics/2q_round3_GPU_acrosscircuit/2q_round3_GPU_acrosscircuit_mean_std_bar_broken_legend.png",
+      "box_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/across_circuit_statistics/2q_round3_GPU_acrosscircuit/2q_round3_GPU_acrosscircuit_boxplot.png",
+      "box_no_legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/across_circuit_statistics/2q_round3_GPU_acrosscircuit/2q_round3_GPU_acrosscircuit_boxplot_no_legend.png",
+      "box_legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/across_circuit_statistics/2q_round3_GPU_acrosscircuit/2q_round3_GPU_acrosscircuit_boxplot_legend.png"
+    },
+    {
+      "group": [
+        3,
+        3,
+        "GPU"
+      ],
+      "basename": "3q_round3_GPU_acrosscircuit",
+      "num_qubits": 3,
+      "depth_round": 3,
+      "platform_tag": "GPU",
+      "circuit_order": [
+        "random_type",
+        "hea_cz",
+        "hea_crz",
+        "hea_rzz"
+      ],
+      "aggregate_methods": [
+        "circuit_folding",
+        "global",
+        "local"
+      ],
+      "depth_summary": "Random=81, HEA-CZ=96, HEA-CRZ=90, HEA-RZZ=96",
+      "std_ddof": 0,
+      "statistics": {
+        "small_constant_depolarizing_0p2pct|circuit_folding|exponential": {
+          "values_by_circuit": {
+            "random_type": 0.1585998877545936,
+            "hea_cz": 0.008714921664757291,
+            "hea_crz": 17.92448355436685,
+            "hea_rzz": 0.11559950808269132
+          },
+          "mean": 4.551849467967224,
+          "std": 7.7208867608448655,
+          "n": 4
+        },
+        "small_constant_depolarizing_0p2pct|circuit_folding|linear": {
+          "values_by_circuit": {
+            "random_type": 0.01555453180630402,
+            "hea_cz": 0.07839872698543077,
+            "hea_crz": 0.003767185800301137,
+            "hea_rzz": 0.0022604738443098155
+          },
+          "mean": 0.024995229609086435,
+          "std": 0.031259235717865964,
+          "n": 4
+        },
+        "small_constant_depolarizing_0p2pct|global|exponential": {
+          "values_by_circuit": {
+            "random_type": 0.07055084999167373,
+            "hea_cz": 0.039967603699209264,
+            "hea_crz": 0.8898461731659129,
+            "hea_rzz": 0.009500403584415978
+          },
+          "mean": 0.25246625761030295,
+          "std": 0.3686239467327386,
+          "n": 4
+        },
+        "small_constant_depolarizing_0p2pct|global|linear": {
+          "values_by_circuit": {
+            "random_type": 0.01766822795142879,
+            "hea_cz": 0.08203808351367597,
+            "hea_crz": 0.0137761139692699,
+            "hea_rzz": 0.017674324690488685
+          },
+          "mean": 0.03278918753121584,
+          "std": 0.028478295327629313,
+          "n": 4
+        },
+        "small_constant_depolarizing_0p2pct|local|exponential": {
+          "values_by_circuit": {
+            "random_type": 0.050234039289717355,
+            "hea_cz": 0.10102810736556211,
+            "hea_crz": 0.015861318083798516,
+            "hea_rzz": 0.025133015895325753
+          },
+          "mean": 0.04806412015860094,
+          "std": 0.03306338040074256,
+          "n": 4
+        },
+        "small_constant_depolarizing_0p2pct|local|linear": {
+          "values_by_circuit": {
+            "random_type": 0.009731485443822838,
+            "hea_cz": 0.13035369126234603,
+            "hea_crz": 0.019418340860026202,
+            "hea_rzz": 0.03834299636968666
+          },
+          "mean": 0.049461628483970434,
+          "std": 0.04782319834002916,
+          "n": 4
+        },
+        "increasing_pauli|circuit_folding|exponential": {
+          "values_by_circuit": {
+            "random_type": 0.21463088362799915,
+            "hea_cz": 0.2587729984351647,
+            "hea_crz": 0.06402404155145015,
+            "hea_rzz": 0.03948822192558871
+          },
+          "mean": 0.1442290363850507,
+          "std": 0.0941809677525756,
+          "n": 4
+        },
+        "increasing_pauli|circuit_folding|linear": {
+          "values_by_circuit": {
+            "random_type": 0.02459880152702934,
+            "hea_cz": 0.14213509062179436,
+            "hea_crz": 0.013138833309879645,
+            "hea_rzz": 0.04095234666851066
+          },
+          "mean": 0.0552062680318035,
+          "std": 0.05115242061974496,
+          "n": 4
+        },
+        "increasing_pauli|global|exponential": {
+          "values_by_circuit": {
+            "random_type": 7.5938178679792125,
+            "hea_cz": 0.014055740306063658,
+            "hea_crz": 0.02189629012901878,
+            "hea_rzz": 0.032842631699556486
+          },
+          "mean": 1.9156531325284627,
+          "std": 3.278296728683579,
+          "n": 4
+        },
+        "increasing_pauli|global|linear": {
+          "values_by_circuit": {
+            "random_type": 0.058394357082584815,
+            "hea_cz": 0.13186359791696828,
+            "hea_crz": 0.025679908439693755,
+            "hea_rzz": 0.043531467547631535
+          },
+          "mean": 0.06486733274671959,
+          "std": 0.04037719755110332,
+          "n": 4
+        },
+        "increasing_pauli|local|exponential": {
+          "values_by_circuit": {
+            "random_type": 0.02398815166375802,
+            "hea_cz": 0.10368172654874702,
+            "hea_crz": 0.037703176650137254,
+            "hea_rzz": 0.07283227002169718
+          },
+          "mean": 0.059551331221084865,
+          "std": 0.03108840911651819,
+          "n": 4
+        },
+        "increasing_pauli|local|linear": {
+          "values_by_circuit": {
+            "random_type": 0.039521338310387996,
+            "hea_cz": 0.2018100598260316,
+            "hea_crz": 0.041511479401411804,
+            "hea_rzz": 0.07244725702131569
+          },
+          "mean": 0.08882253363978676,
+          "std": 0.06652682630351607,
+          "n": 4
+        },
+        "increasing_pauli_amplitude_damping|circuit_folding|exponential": {
+          "values_by_circuit": {
+            "random_type": 0.4379373506854812,
+            "hea_cz": 0.49090551888235917,
+            "hea_crz": 0.098675447883085,
+            "hea_rzz": 0.011932876400226652
+          },
+          "mean": 0.259862798462788,
+          "std": 0.20769081169435533,
+          "n": 4
+        },
+        "increasing_pauli_amplitude_damping|circuit_folding|linear": {
+          "values_by_circuit": {
+            "random_type": 0.03178694967517749,
+            "hea_cz": 0.18556539365209734,
+            "hea_crz": 0.011167568942063555,
+            "hea_rzz": 0.047383115899279925
+          },
+          "mean": 0.06897575704215457,
+          "std": 0.06852769425779096,
+          "n": 4
+        },
+        "increasing_pauli_amplitude_damping|global|exponential": {
+          "values_by_circuit": {
+            "random_type": 6.803930922400699,
+            "hea_cz": 0.05634377837633331,
+            "hea_crz": 0.037585652070397095,
+            "hea_rzz": 0.09338358791129671
+          },
+          "mean": 1.7478109851896815,
+          "std": 2.919221250354964,
+          "n": 4
+        },
+        "increasing_pauli_amplitude_damping|global|linear": {
+          "values_by_circuit": {
+            "random_type": 0.05723626184448962,
+            "hea_cz": 0.18443671177156357,
+            "hea_crz": 0.031109320204399632,
+            "hea_rzz": 0.09489337230953628
+          },
+          "mean": 0.09191891653249727,
+          "std": 0.05802819005634487,
+          "n": 4
+        },
+        "increasing_pauli_amplitude_damping|local|exponential": {
+          "values_by_circuit": {
+            "random_type": 0.037568834637969756,
+            "hea_cz": 0.39362130750126495,
+            "hea_crz": 0.003215741847487283,
+            "hea_rzz": 0.010684441832961383
+          },
+          "mean": 0.11127258145492083,
+          "std": 0.16351399008449102,
+          "n": 4
+        },
+        "increasing_pauli_amplitude_damping|local|linear": {
+          "values_by_circuit": {
+            "random_type": 0.0639162647436706,
+            "hea_cz": 0.26341385386397215,
+            "hea_crz": 0.003653716677019622,
+            "hea_rzz": 0.07675252017921047
+          },
+          "mean": 0.1019340888659682,
+          "std": 0.0972293839509547,
+          "n": 4
+        }
+      },
+      "max_individual_absolute_error": 17.92448355436685,
+      "broken_bar_threshold": 4.0,
+      "broken_bar_generated": true,
+      "bar_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/across_circuit_statistics/3q_round3_GPU_acrosscircuit/3q_round3_GPU_acrosscircuit_mean_std_bar.png",
+      "bar_no_legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/across_circuit_statistics/3q_round3_GPU_acrosscircuit/3q_round3_GPU_acrosscircuit_mean_std_bar_no_legend.png",
+      "bar_legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/across_circuit_statistics/3q_round3_GPU_acrosscircuit/3q_round3_GPU_acrosscircuit_mean_std_bar_legend.png",
+      "broken_bar_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/across_circuit_statistics/3q_round3_GPU_acrosscircuit/3q_round3_GPU_acrosscircuit_mean_std_bar_broken.png",
+      "broken_bar_no_legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/across_circuit_statistics/3q_round3_GPU_acrosscircuit/3q_round3_GPU_acrosscircuit_mean_std_bar_broken_no_legend.png",
+      "broken_bar_legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/across_circuit_statistics/3q_round3_GPU_acrosscircuit/3q_round3_GPU_acrosscircuit_mean_std_bar_broken_legend.png",
+      "box_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/across_circuit_statistics/3q_round3_GPU_acrosscircuit/3q_round3_GPU_acrosscircuit_boxplot.png",
+      "box_no_legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/across_circuit_statistics/3q_round3_GPU_acrosscircuit/3q_round3_GPU_acrosscircuit_boxplot_no_legend.png",
+      "box_legend_output": "/Users/sungwonyun/Documents/GitHub/ZNE_depth_reduced/zne_plots_gpu2_round3_round4/across_circuit_statistics/3q_round3_GPU_acrosscircuit/3q_round3_GPU_acrosscircuit_boxplot_legend.png"
+    }
+  ],
+  "circuit_aggregate_skipped": [
+    {
+      "group": [
+        1,
+        3,
+        "GPU"
+      ],
+      "reason": "1q excluded from across-circuit statistics: only random_type is available"
+    },
+    {
+      "group": [
+        4,
+        3,
+        "GPU"
+      ],
+      "reason": "requires all 4 circuit types and at least 2 folding methods complete across all 3 target noises, with successful fits and ideal values",
+      "missing_circuits": [],
+      "incomplete_methods": {
+        "global": [
+          {
+            "unitary": "hea_crz",
+            "missing_noise": [
+              "increasing_pauli_amplitude_damping"
+            ]
+          },
+          {
+            "unitary": "hea_rzz",
+            "missing_noise": [
+              "increasing_pauli_amplitude_damping"
+            ]
+          }
+        ],
+        "local": [
+          {
+            "unitary": "random_type",
+            "missing_noise": [
+              "increasing_pauli_amplitude_damping"
+            ]
+          },
+          {
+            "unitary": "hea_cz",
+            "missing_noise": [
+              "increasing_pauli_amplitude_damping"
+            ]
+          },
+          {
+            "unitary": "hea_crz",
+            "missing_noise": [
+              "increasing_pauli_amplitude_damping"
+            ]
+          },
+          {
+            "unitary": "hea_rzz",
+            "missing_noise": [
+              "small_constant_depolarizing_0p2pct",
+              "increasing_pauli",
+              "increasing_pauli_amplitude_damping"
+            ]
+          }
+        ]
+      },
+      "complete_methods": [
+        "circuit_folding"
+      ],
+      "minimum_methods_required": 2,
+      "missing_fits": [],
+      "missing_ideals": []
+    }
+  ],
+  "circuit_aggregate_unassigned": [],
+  "circuit_aggregate_duplicates": [],
+  "duplicates": [],
+  "unreadable_reports": [],
+  "ignored_reports": []
+}
