@@ -1,1252 +1,837 @@
-"""Create one method-by-noise ZNE summary figure per experiment case.
+"""GPU2 Ver2 ZNE aggregate bar figures (increasing Pauli noise only).
 
-For each fixed (num_qubits, unitary, depth, platform) setting, this script scans
-``zne_reports`` and combines the available reports into one figure:
+Produces five figure families, each in two statistical modes:
 
-* x-axis: constant depolarizing (0.2%), increasing Pauli, increasing Pauli + AD;
-* color: circuit folding, global width folding, local width folding;
-* marker: exponential or linear extrapolation;
-* gate-count definition: before-transpilation weighted count only.
+  Figure 1: fixed n (2,3,4,5q); x-axis D1-D4 (depth rounds)
+  Figure 2: fixed depth round (D1-D4); x-axis 2q-5q
+  Figure 3: across all four depth rounds; x-axis 2q-5q
+  Figure 4: across 2q-5q; x-axis D1-D4
+  Figure 5: all fully available reports, x-axis folding method (64/64/32 reports)
 
-A complete per-circuit group contains 3 methods x 3 noise models = 9 JSON reports.
-Incomplete per-circuit groups are drawn automatically when at least one method
-has results for at least two target noise models.  This allows the current partial
-0.2% data set to be visualized while local-folding reports are still pending.
+Type 1: all *finite, successful* extrapolations; mean +/- population SD
+        of absolute error |E_ZNE - E_ideal|. Pathological bars are visually
+        truncated and zigzag-marked. Numeric mean +/- SD is shown for every
+        broken bar and every cohort with out-of-range estimates.
+Type 2: mean +/- population SD using only extrapolated E_ZNE in [-1, 1].
+        Exclusions shown as (excluded/total), e.g. 2/16. Type 1 never
+        shows an excluded/total label; it includes all finite estimates.
 
-In addition, the script creates two across-circuit statistical summaries for
-each (num_qubits, depth round, platform) group when all four circuit families
-(random_type, HEA-CZ, HEA-CRZ, HEA-RZZ) are complete and at least two folding
-methods are complete across all three target noise models. If all three methods
-are complete, all three are included; otherwise the two complete methods are used:
+Each source atomic group requires all FOUR circuit families at the SAME
+(n, depth round, folding method). A figure with any incomplete required bar
+is skipped by default; --allow-partial-figures draws only complete bars.
+No bar is ever averaged from fewer than four circuits. Figure 3 needs 16 per n/method;
+Figure 4 needs 16 per depth/method, except LOCAL, which is defined only
+for 2q and 3q (eight source reports per depth). Figure 5 needs EVERY
+expected report for every method (64 Circuit, 64 Global, 32 Local).
+Figure 5 is always skipped in both modes if any source is absent, even
+if --allow-partial-figures is enabled.
 
-* a bar chart of mean absolute ZNE error with SD error bars;
-* a box plot with the four actual circuit-family errors overlaid.
+Both extrapolations are retained: Linear is the solid left bar, Exponential is the hatched right bar.
+Only reports named *_GPU_increasing_pauli_<method>.json are used.
 
-The across-circuit summaries intentionally exclude 1q, because only the random
-circuit family is defined for 1q in this experiment and therefore there is no
-four-circuit average to report.
+Important: the supplied GPU2 report format may have ideal_expectation=None.
+The script NEVER treats None as zero. Supply a JSON ideal reference mapping
+(see --ideal-reference), or use reports containing ideal_expectation.
+
+The plotting script only reads input JSON files and writes to output folder.
+It never changes experiments, branches, or source reports.
 """
-
 from __future__ import annotations
 
 import argparse
+import csv
 import json
+import math
 import re
-from collections import defaultdict
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib import colors as mcolors
-from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
+from matplotlib.colors import to_rgb
 
-import plot_gate_axis_zne as gate_plotter
-
-try:
-    import experiment_config
-except ImportError:  # fallback: infer ordinal depth rounds from available reports
-    experiment_config = None
-
-
-# ============================================================
-# User configuration
-# ============================================================
-REPORT_DIRECTORY = "./zne_reports_gpu2_round3_round4"
-PLOT_OUTPUT_ROOT = "./zne_plots_gpu2_round3_round4"
-ALLOW_PARTIAL_GROUPS = True
+# ------------------------------------------------------------
+# User settings
+# ------------------------------------------------------------
+REPORT_DIRECTORY = "./zne_reports_ver2"
+PLOT_OUTPUT_ROOT = "./zne_plots_ver2_increasing_pauli"
 SAVE_DPI = 200
-SHOW_PLOTS = False
-
-NUM_QUBITS_FILTER = None       # Example: [2, 3, 5]
-UNITARY_FILTER = None          # Example: ["hea_cz", "hea_crz"]
-DEPTH_FILTER = None            # Example: [30, 32]
-PLATFORM_FILTER = None         # Example: ["GPU"]
+# Text styling: same font and size on both x and y axis tick labels.
+AXIS_LABEL_FONT_SIZE = 15
+LEGEND_FONT_SIZE = AXIS_LABEL_FONT_SIZE
+TICK_LABEL_FONT_SIZE = 14
+TICK_LABEL_FONT_FAMILY = "DejaVu Sans"
+TICK_LABEL_FONT_WEIGHT = "normal"
+CASE_KEY = "before_weighted"
+SD_DDOF = 0  # descriptive SD (population SD), as in the original batch code
+BROKEN_BAR_ERROR_THRESHOLD = 4.0  # same individual-error threshold as original
 
 METHOD_ORDER = ("circuit_folding", "global", "local")
-
-# Aggregate analysis across the four circuit families.  A circuit-family average
-# is formed only after computing the absolute ZNE error for each circuit.
-CIRCUIT_ORDER = ("random_type", "hea_cz", "hea_crz", "hea_rzz")
-CIRCUIT_LABELS = {
-    "random_type": "Random",
-    "hea_cz": "HEA-CZ",
-    "hea_crz": "HEA-CRZ",
-    "hea_rzz": "HEA-RZZ",
+METHOD_LABELS = {
+    "circuit_folding": "Depth-folding",
+    "global": "Global width-folding",
+    "local": "Local width-folding",
 }
-GENERATE_CIRCUIT_AGGREGATE_PLOTS = True
-AGGREGATE_STD_DDOF = 0  # descriptive SD across the four selected circuit families
-AGGREGATE_BAR_FIGSIZE = (13, 6.5)
-AGGREGATE_BOX_FIGSIZE = (13, 6.5)
-AGGREGATE_CLUSTER_SPAN = 0.72
-AGGREGATE_BAR_WIDTH = 0.105
-
-# Extra visualization for pathological ZNE extrapolation outliers.
-# The ordinary mean±SD bar plot is ALWAYS kept. If any individual absolute
-# ZNE error included in an aggregate is >= this threshold, an additional
-# truncated/broken-bar figure is generated so the remaining bars stay readable.
-BROKEN_BAR_ERROR_THRESHOLD = 4.0
-BROKEN_BAR_HEADROOM = 1.22
-BROKEN_BAR_MIN_YMAX = 0.05
-
-NOISE_PROFILES = {
-    # IMPORTANT: the historical 2% ``constant_depolarizing`` reports are
-    # intentionally NOT included.  The constant-DP point in every new figure
-    # comes only from ``small_constant_depolarizing_0p2pct`` reports.
-    "small_constant_depolarizing_0p2pct": {
-        "label": "Constant depolarizing\n(0.2%)",
-    },
-    "increasing_pauli": {
-        "label": "Increasing\nPauli",
-    },
-    "increasing_pauli_amplitude_damping": {
-        "label": "Increasing Pauli +\namplitude damping",
-    },
+METHOD_COLORS = {
+    "circuit_folding": "#1982c4",
+    "global": "#ff595e",
+    "local": "#8ac926",
 }
+FIT_ORDER = ("linear", "exponential")
+FIT_LABELS = {"exponential": "Exponential", "linear": "Linear"}
+FIT_HATCHES = {"exponential": "///", "linear": ""}
+CIRCUITS = ("random_type", "hea_cz", "hea_crz", "hea_rzz")
+CIRCUIT_ABBREVIATIONS = ("Random", "CZ", "CRZ", "RZZ")
+QUBITS = (2, 3, 4, 5)
+ROUNDS = (1, 2, 3, 4)
+
+# Exact depth schedule from supplied experiment_config_2.py (GPU2 Ver2).
+# Do not infer rounds by ranking only the currently available report files:
+# missing earlier rounds would otherwise silently shift the mapping.
+DEPTHS = {
+    "random_type": {2: (24,48,72,96), 3: (27,54,81,108), 4: (32,64,96,128), 5: (32,64,96,128)},
+    "hea_cz":     {2: (30,60,90,120),3: (32,64,96,128),4: (32,64,96,128),5: (32,64,96,128)},
+    "hea_crz":    {2: (30,60,90,120),3: (30,60,90,120),4: (30,60,90,120),5: (30,60,90,120)},
+    "hea_rzz":    {2: (30,60,90,120),3: (32,64,96,128),4: (32,64,96,128),5: (32,64,96,128)},
+}
+
+REPORT_NAME = re.compile(
+    r"^(?P<n>[2-5])q_(?P<unitary>random_type|hea_cz|hea_crz|hea_rzz)_"
+    r"(?P<depth>\d+)_GPU_increasing_pauli_"
+    r"(?P<method>circuit_folding|global|local)\.json$"
+)
+
+
+def allowed_methods(n: int) -> tuple[str, ...]:
+    return METHOD_ORDER if n in (2, 3) else METHOD_ORDER[:2]
+
+
+def expected_depth(n: int, unitary: str, round_number: int) -> int:
+    return DEPTHS[unitary][n][round_number - 1]
+
+
+def ideal_key(n: int, unitary: str, depth: int) -> str:
+    return f"{n}q_{unitary}_{depth}"
 
 
 @dataclass(frozen=True)
-class ReportRecord:
-    path: Path
-    report: dict[str, Any]
-    num_qubits: int
+class Record:
+    n: int
+    round_number: int
     unitary: str
     depth: int
     method: str
-    execution_tag: str
-    platform_tag: str
-    noise_key: str
-
-    @property
-    def case_key(self) -> tuple[int, str, int, str]:
-        return self.num_qubits, self.unitary, self.depth, self.platform_tag
+    estimates: dict[str, float]
+    ideal_in_report: float | None
+    path: Path
 
 
-def _safe_tag(value: Any) -> str:
-    text = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(value).strip())
-    return text.strip("_") or "unknown"
+@dataclass(frozen=True)
+class Observation:
+    estimate: float
+    ideal: float
+    error: float
+    report_file: str
+    unitary: str
+    n: int
+    round_number: int
 
 
-def _execution_tag_from_filename(path: Path, report: dict[str, Any]) -> str:
-    num_qubits = int(report["num_qubits"])
-    unitary = str(report["unitary_type"])
-    depth = int(report["depth"])
-    method = str(report["method"])
-    prefix = f"{num_qubits}q_{unitary}_{depth}_"
-    suffix = f"_{method}.json"
-    name = path.name
-    if name.startswith(prefix) and name.endswith(suffix):
-        middle = name[len(prefix):-len(suffix)]
-        if middle:
-            return middle
-    return gate_plotter._backend_tag(report)
+@dataclass(frozen=True)
+class BarStat:
+    mean: float | None
+    std: float | None
+    retained: int
+    excluded: int  # actually removed from the average; zero for Type 1
+    out_of_range: int  # estimates outside [-1, 1], in both Type 1 and Type 2
+    total: int
+    max_error: float | None
+    raw_errors: tuple[float, ...]
 
 
-def _split_noise_execution_tag(execution_tag: str) -> tuple[str, str] | None:
-    for noise_key in sorted(NOISE_PROFILES, key=len, reverse=True):
-        suffix = f"_{noise_key}"
-        if execution_tag.endswith(suffix):
-            platform_tag = execution_tag[:-len(suffix)]
-            if platform_tag:
-                return platform_tag, noise_key
-    return None
+def finite_number(value: Any) -> float | None:
+    try:
+        converted = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return converted if math.isfinite(converted) else None
 
 
-def _passes_filters(record: ReportRecord) -> bool:
-    if NUM_QUBITS_FILTER is not None and record.num_qubits not in NUM_QUBITS_FILTER:
-        return False
-    if UNITARY_FILTER is not None and record.unitary not in UNITARY_FILTER:
-        return False
-    if DEPTH_FILTER is not None and record.depth not in DEPTH_FILTER:
-        return False
-    if PLATFORM_FILTER is not None and record.platform_tag not in PLATFORM_FILTER:
-        return False
-    return True
-
-
-def _load_records(report_directory: Path):
-    records: list[ReportRecord] = []
-    unreadable: list[dict[str, Any]] = []
-    ignored: list[dict[str, Any]] = []
-
-    for path in sorted(report_directory.glob("*.json")):
-        try:
-            with path.open("r", encoding="utf-8") as handle:
-                report = json.load(handle)
-            execution_tag = _execution_tag_from_filename(path, report)
-            split = _split_noise_execution_tag(execution_tag)
-            if split is None:
-                ignored.append({
-                    "path": str(path),
-                    "reason": "execution tag is not one of the three target noise profiles (0.2% constant DP, increasing Pauli, increasing Pauli + AD)",
-                })
-                continue
-            platform_tag, noise_key = split
-            record = ReportRecord(
-                path=path.resolve(),
-                report=report,
-                num_qubits=int(report["num_qubits"]),
-                unitary=str(report["unitary_type"]),
-                depth=int(report["depth"]),
-                method=str(report["method"]),
-                execution_tag=execution_tag,
-                platform_tag=platform_tag,
-                noise_key=noise_key,
-            )
-        except Exception as error:
-            unreadable.append({"path": str(path), "error": repr(error)})
+def load_ideal_reference(path: Path | None) -> dict[str, float]:
+    if path is None:
+        return {}
+    if not path.is_file():
+        raise FileNotFoundError(f"Ideal reference not found: {path}")
+    with path.open(encoding="utf-8") as f:
+        obj = json.load(f)
+    if not isinstance(obj, dict):
+        raise ValueError("Ideal reference must be a JSON object: {'2q_hea_cz_30': 0.123, ...}")
+    result: dict[str, float] = {}
+    for key, value in obj.items():
+        if value is None:  # Unfilled reference template values are acceptable.
             continue
-
-        if _passes_filters(record):
-            records.append(record)
-
-    return records, unreadable, ignored
-
-
-def _ideal_lookup(records: list[ReportRecord]):
-    candidates: dict[tuple[int, str, int], list[float]] = defaultdict(list)
-    for record in records:
-        ideal = record.report.get("ideal_expectation")
-        if ideal is not None:
-            candidates[(record.num_qubits, record.unitary, record.depth)].append(
-                float(ideal)
-            )
-
-    result: dict[tuple[int, str, int], float] = {}
-    for key, values in candidates.items():
-        reference = values[0]
-        if any(abs(value - reference) > 1e-9 for value in values[1:]):
-            raise ValueError(f"Inconsistent ideal_expectation values for {key}")
-        result[key] = reference
+        num = finite_number(value)
+        if num is None or not -1.0 <= num <= 1.0:
+            raise ValueError(f"Ideal reference {key} is not a finite expectation in [-1,1]: {value}")
+        result[str(key)] = num
     return result
 
 
-def _build_groups(records: list[ReportRecord]):
-    groups: dict[
-        tuple[int, str, int, str],
-        dict[tuple[str, str], ReportRecord],
-    ] = defaultdict(dict)
-    duplicates: list[dict[str, Any]] = []
-
-    for record in records:
-        combination = (record.method, record.noise_key)
-        if combination in groups[record.case_key]:
-            duplicates.append({
-                "case": record.case_key,
-                "combination": combination,
-                "paths": [
-                    str(groups[record.case_key][combination].path),
-                    str(record.path),
-                ],
-            })
-        else:
-            groups[record.case_key][combination] = record
-    return groups, duplicates
-
-
-
-def _depth_round_lookup(records: list[ReportRecord]) -> dict[tuple[int, str, int], int]:
-    """Map (num_qubits, unitary, depth) to the experiment-config ordinal round.
-
-    Different circuit families intentionally use different physical depths in the
-    same round (for example 3q: random=27, CRZ=30, CZ/RZZ=32).  Therefore the
-    aggregate analysis must align circuits by round index, not by raw depth.
-    """
-    mapping: dict[tuple[int, str, int], int] = {}
-
-    if experiment_config is not None:
-        for group in getattr(experiment_config, "EXPERIMENTS", []):
-            unitary = str(group.get("unitary", ""))
-            if unitary not in CIRCUIT_ORDER:
+def load_reports(folder: Path) -> tuple[dict[tuple[int,int,str,str],Record], list[dict[str,str]], list[str]]:
+    records: dict[tuple[int,int,str,str],Record] = {}
+    bad: list[dict[str,str]] = []
+    ignored: list[str] = []
+    for path in sorted(folder.glob("*.json")):
+        match = REPORT_NAME.fullmatch(path.name)
+        if match is None:
+            ignored.append(path.name)
+            continue
+        n = int(match.group("n"))
+        unitary = match.group("unitary")
+        depth = int(match.group("depth"))
+        method = match.group("method")
+        if method not in allowed_methods(n):
+            ignored.append(path.name)
+            continue
+        try:
+            if depth not in DEPTHS[unitary][n]:
+                ignored.append(path.name)
                 continue
-            for raw_nq, depths in group.get("depths_by_num_qubits", {}).items():
-                nq = int(raw_nq)
-                for round_index, depth in enumerate(depths, start=1):
-                    key = (nq, unitary, int(depth))
-                    previous = mapping.get(key)
-                    if previous is not None and previous != round_index:
-                        raise ValueError(
-                            f"Conflicting depth-round mapping for {key}: "
-                            f"{previous} vs {round_index}"
-                        )
-                    mapping[key] = round_index
+            rnd = DEPTHS[unitary][n].index(depth) + 1
+            with path.open(encoding="utf-8") as f:
+                data = json.load(f)
+            if (int(data["num_qubits"]) != n or str(data["unitary_type"]) != unitary
+                    or int(data["depth"]) != depth or str(data["method"]) != method):
+                raise ValueError("Filename and report metadata disagree")
+            if str(data.get("execution", {}).get("noise_filename_tag", "increasing_pauli")) != "increasing_pauli":
+                raise ValueError("Report noise tag is not increasing_pauli")
+            if "expectation_values" not in data or "fold_factors" not in data:
+                raise ValueError("Missing expectation_values/fold_factors")
+            if len(data["expectation_values"]) != len(data["fold_factors"]):
+                raise ValueError("Incomplete report: fold factors / expectation count differ")
+            case = data["cases"][CASE_KEY]
+            estimates: dict[str,float] = {}
+            for fit_name in FIT_ORDER:
+                fit = case[fit_name]
+                if not fit.get("success"):
+                    raise ValueError(f"Unsuccessful {fit_name} fit")
+                estimate = finite_number(fit.get("at_N_zero"))
+                if estimate is None:
+                    raise ValueError(f"Non-finite or absent {fit_name} at_N_zero")
+                estimates[fit_name] = estimate
+            reported = data.get("ideal_expectation")
+            ideal = None if reported is None else finite_number(reported)
+            if reported is not None and (ideal is None or not -1.0 <= ideal <= 1.0):
+                raise ValueError(f"Invalid ideal expectation: {reported}")
+            key = (n, rnd, unitary, method)
+            if key in records:
+                raise ValueError("Duplicate for this circuit, round and method")
+            records[key] = Record(n, rnd, unitary, depth, method, estimates, ideal, path)
+        except Exception as exc:
+            bad.append({"file": str(path), "reason": str(exc)})
+    return records, bad, ignored
 
-    # Fallback for any report not covered by the current configuration: use the
-    # ordinal position of its depth within that (nq, unitary) family.
-    depths_by_family: dict[tuple[int, str], set[int]] = defaultdict(set)
-    for record in records:
-        if record.unitary in CIRCUIT_ORDER:
-            depths_by_family[(record.num_qubits, record.unitary)].add(record.depth)
-    for (nq, unitary), depths in depths_by_family.items():
-        for round_index, depth in enumerate(sorted(depths), start=1):
-            mapping.setdefault((nq, unitary, depth), round_index)
-    return mapping
 
-
-def _build_circuit_aggregate_groups(
-    records: list[ReportRecord],
-    round_lookup: dict[tuple[int, str, int], int],
-):
-    groups: dict[
-        tuple[int, int, str],
-        dict[str, dict[tuple[str, str], ReportRecord]],
-    ] = defaultdict(lambda: defaultdict(dict))
-    unassigned: list[dict[str, Any]] = []
-    duplicates: list[dict[str, Any]] = []
-
-    for record in records:
-        if record.unitary not in CIRCUIT_ORDER:
+def build_ideal_lookup(records: dict, external: dict[str,float]):
+    by_case: dict[str, float] = dict(external)
+    errors: list[str] = []
+    for record in records.values():
+        val = record.ideal_in_report
+        if val is None:
             continue
-        round_index = round_lookup.get(
-            (record.num_qubits, record.unitary, record.depth)
-        )
-        if round_index is None:
-            unassigned.append({
-                "path": str(record.path),
-                "reason": "could not map report depth to an experiment round",
-            })
-            continue
-        group_key = (record.num_qubits, round_index, record.platform_tag)
-        combination = (record.method, record.noise_key)
-        circuit_map = groups[group_key][record.unitary]
-        if combination in circuit_map:
-            duplicates.append({
-                "group": group_key,
-                "unitary": record.unitary,
-                "combination": combination,
-                "paths": [str(circuit_map[combination].path), str(record.path)],
-            })
-            continue
-        circuit_map[combination] = record
-    return groups, unassigned, duplicates
+        key = ideal_key(record.n, record.unitary, record.depth)
+        if key in by_case and abs(by_case[key] - val) > 1e-8:
+            errors.append(f"Inconsistent ideal {key}: reference={by_case[key]}, report={val}")
+        by_case[key] = val
+    if errors:
+        raise ValueError("\n".join(errors))
+    return by_case
 
 
-def _darken_color(color: str, factor: float = 0.62):
-    rgb = np.asarray(mcolors.to_rgb(color), dtype=float)
-    return tuple(np.clip(rgb * factor, 0.0, 1.0))
+def atomic_group(n: int, rnd: int, method: str, fit: str,
+                 records: dict, ideals: dict[str,float]) -> tuple[list[Observation] | None, str | None]:
+    """Require exactly four source reports, one for each circuit family."""
+    if method not in allowed_methods(n):
+        return None, "not defined for this n"
+    values: list[Observation] = []
+    for unitary in CIRCUITS:
+        record = records.get((n, rnd, unitary, method))
+        if record is None:
+            return None, f"missing report: {n}q D{rnd} {unitary} {method}"
+        ikey = ideal_key(n, unitary, record.depth)
+        if ikey not in ideals:
+            return None, f"missing ideal reference: {ikey}"
+        ideal = ideals[ikey]
+        estimate = record.estimates[fit]
+        values.append(Observation(estimate, ideal, abs(estimate - ideal),
+                                  record.path.name, unitary, n, rnd))
+    return values, None
 
 
-def _aggregate_error_values(
-    circuit_records: dict[str, dict[tuple[str, str], ReportRecord]],
-    ideal_values: dict[tuple[int, str, int], float],
-):
-    """Return 4-circuit absolute-error vectors for methods complete across all noises.
+def aggregate(observations: list[Observation], filtered: bool) -> BarStat:
+    """Mean and population SD of INDIVIDUAL absolute errors, not expectations.
 
-    A method is included in the aggregate only when that same method has all three
-    target noise profiles for all four circuit families.  This makes partial
-    aggregate plots possible without mixing incomparable method coverage.
+    Type 1 includes every finite estimate (so zero samples are *excluded*).
+    Type 2 excludes estimates outside [-1, 1].  In either type, separately
+    track out_of_range so Type 1 can show a mean +/- SD label at those bars.
     """
-    missing_fits: list[dict[str, Any]] = []
-    missing_ideals: list[dict[str, Any]] = []
-    incomplete_methods: dict[str, list[dict[str, Any]]] = {}
+    admissible = [o for o in observations if -1.0 <= o.estimate <= 1.0]
+    selected = admissible if filtered else list(observations)
+    errors = tuple(float(o.error) for o in selected)
+    a = np.asarray(errors, dtype=float)
+    out_of_range = len(observations) - len(admissible)
+    return BarStat(
+        mean=float(np.mean(a)) if len(a) else None,
+        std=float(np.std(a, ddof=SD_DDOF)) if len(a) else None,
+        retained=len(selected),
+        excluded=out_of_range if filtered else 0,
+        out_of_range=out_of_range,
+        total=len(observations),
+        max_error=float(np.max(a)) if len(a) else None,
+        raw_errors=errors,
+    )
 
-    # All four circuit families are required for an across-circuit statistic.
-    missing_circuits = [
-        unitary for unitary in CIRCUIT_ORDER if unitary not in circuit_records
-    ]
-    if missing_circuits:
-        return None, {
-            "missing_circuits": missing_circuits,
-            "incomplete_methods": incomplete_methods,
-            "missing_fits": missing_fits,
-            "missing_ideals": missing_ideals,
-        }, ()
 
-    aggregate_methods: list[str] = []
-    for method in METHOD_ORDER:
-        method_missing: list[dict[str, Any]] = []
-        for unitary in CIRCUIT_ORDER:
-            available = circuit_records.get(unitary, {})
-            missing_noise = [
-                noise for noise in NOISE_PROFILES
-                if (method, noise) not in available
-            ]
-            if missing_noise:
-                method_missing.append({
-                    "unitary": unitary,
-                    "missing_noise": missing_noise,
-                })
-        if method_missing:
-            incomplete_methods[method] = method_missing
+def build_points(records: dict, ideals: dict[str,float],
+                 family: int, fixed: int, mode: str):
+    """Map (category, method, fit) to BarStat, requiring full cohorts per bar."""
+    points: dict[tuple[int,str,str],BarStat] = {}
+    skipped: list[dict[str,str]] = []
+    categories = ROUNDS if family in (1, 4) else QUBITS
+    for category in categories:
+        for method in METHOD_ORDER:
+            for fit in FIT_ORDER:
+                source_groups: list[tuple[int,int]] = []
+                if family == 1:
+                    source_groups = [(fixed, category)]
+                elif family == 2:
+                    source_groups = [(category, fixed)]
+                elif family == 3:
+                    source_groups = [(category, rnd) for rnd in ROUNDS]
+                elif family == 4:
+                    # Local is only defined for 2q/3q and thus has N=8;
+                    # other methods have N=16 (2q through 5q).
+                    ns = (2, 3) if method == "local" else QUBITS
+                    source_groups = [(n, category) for n in ns]
+                observations: list[Observation] = []
+                reason = None
+                for n, rnd in source_groups:
+                    if method not in allowed_methods(n):
+                        reason = "method not defined for this n"
+                        break
+                    part, reason = atomic_group(n, rnd, method, fit, records, ideals)
+                    if part is None:
+                        break
+                    observations.extend(part)
+                if reason is not None:
+                    skipped.append({"category": str(category), "method": method,
+                                    "fit": fit, "reason": reason})
+                    continue
+                # Cohort cardinality is exactly 4, 8 or 16, never opportunistic.
+                expected = len(source_groups) * len(CIRCUITS)
+                if len(observations) != expected:
+                    raise AssertionError("Unexpected aggregation cohort cardinality")
+                points[(category, method, fit)] = aggregate(observations, filtered=(mode == "type2"))
+    return categories, points, skipped
+
+
+def required_bar_keys(family: int, fixed: int):
+    """Required bars, excluding methods intentionally absent for 4q/5q."""
+    cats = ROUNDS if family in (1, 4) else QUBITS
+    needed = []
+    for category in cats:
+        if family == 1:
+            methods = allowed_methods(fixed)
+        elif family in (2,3):
+            methods = allowed_methods(category)
         else:
-            aggregate_methods.append(method)
-
-    # Do not create an across-circuit aggregate from only one folding method.
-    # Use all three methods when all are complete; while jobs are still running,
-    # allow exactly the two methods that are complete across all 3 target noises
-    # and all 4 circuit families.
-    if len(aggregate_methods) < 2:
-        return None, {
-            "missing_circuits": [],
-            "incomplete_methods": incomplete_methods,
-            "complete_methods": list(aggregate_methods),
-            "minimum_methods_required": 2,
-            "missing_fits": missing_fits,
-            "missing_ideals": missing_ideals,
-        }, tuple(aggregate_methods)
-
-    vectors: dict[tuple[str, str, str], list[float]] = {}
-    for noise in NOISE_PROFILES:
-        for method in aggregate_methods:
-            for fit_key in ("exponential", "linear"):
-                values: list[float] = []
-                for unitary in CIRCUIT_ORDER:
-                    record = circuit_records[unitary][(method, noise)]
-                    ideal_key = (record.num_qubits, record.unitary, record.depth)
-                    ideal = ideal_values.get(ideal_key)
-                    if ideal is None:
-                        missing_ideals.append({
-                            "unitary": unitary,
-                            "method": method,
-                            "noise": noise,
-                            "depth": record.depth,
-                        })
-                        continue
-                    fit = record.report["cases"][gate_plotter.PRIMARY_CASE_KEY][fit_key]
-                    if not fit.get("success") or fit.get("at_N_zero") is None:
-                        missing_fits.append({
-                            "unitary": unitary,
-                            "method": method,
-                            "noise": noise,
-                            "fit": fit_key,
-                            "depth": record.depth,
-                        })
-                        continue
-                    error = abs(float(fit["at_N_zero"]) - float(ideal))
-                    values.append(error)
-                vectors[(noise, method, fit_key)] = values
-
-    problems = {
-        "missing_circuits": [],
-        "incomplete_methods": incomplete_methods,
-        "complete_methods": list(aggregate_methods),
-        "minimum_methods_required": 2,
-        "missing_fits": missing_fits,
-        "missing_ideals": missing_ideals,
-    }
-    if missing_fits or missing_ideals:
-        return None, problems, tuple(aggregate_methods)
-    if any(len(values) != len(CIRCUIT_ORDER) for values in vectors.values()):
-        return None, problems, tuple(aggregate_methods)
-    return vectors, problems, tuple(aggregate_methods)
-
-def _series_order(methods: tuple[str, ...] | list[str]):
-    return [
-        (method, fit_key, fit_label, marker)
-        for method in methods
-        for fit_key, fit_label, marker in (
-            ("exponential", "Exponential", gate_plotter.EXPONENTIAL_ZERO_MARKER),
-            ("linear", "Linear", gate_plotter.LINEAR_ZERO_MARKER),
-        )
-    ]
-
-def _aggregate_depth_summary(
-    circuit_records: dict[str, dict[tuple[str, str], ReportRecord]]
-) -> str:
-    parts = []
-    for unitary in CIRCUIT_ORDER:
-        records = circuit_records.get(unitary, {})
-        representative = next(iter(records.values()), None)
-        if representative is not None:
-            parts.append(f"{CIRCUIT_LABELS[unitary]}={representative.depth}")
-    return ", ".join(parts)
-
-
-def _save_legend_only(
-    handles,
-    labels,
-    output_path: Path,
-    *,
-    ncol: int = 2,
-):
-    """Save a tightly cropped legend-only PNG with the original legend sizing."""
-    if not handles:
-        return None
-    legend_figure = plt.figure(figsize=(7.0, 4.0))
-    legend_artist = legend_figure.legend(
-        handles, labels, loc="center", frameon=True, ncol=ncol
-    )
-    legend_figure.canvas.draw()
-    renderer = legend_figure.canvas.get_renderer()
-    bbox = legend_artist.get_window_extent(renderer=renderer)
-    bbox_inches = bbox.transformed(legend_figure.dpi_scale_trans.inverted())
-    legend_figure.savefig(
-        output_path,
-        dpi=SAVE_DPI,
-        bbox_inches=bbox_inches,
-        pad_inches=0.12,
-    )
-    plt.close(legend_figure)
-    return output_path
-
-
-def _artist_display_bbox(artist, renderer, axis):
-    """Best-effort display-space bounding box for a plotted data artist."""
-    try:
-        bbox = artist.get_window_extent(renderer=renderer)
-        values = np.asarray([bbox.x0, bbox.y0, bbox.x1, bbox.y1], dtype=float)
-        if np.isfinite(values).all() and bbox.width > 0 and bbox.height > 0:
-            return bbox
-    except Exception:
-        pass
-
-    # Scatter collections often do not expose a useful window extent.
-    try:
-        offsets = np.asarray(artist.get_offsets(), dtype=float)
-        if offsets.ndim == 2 and offsets.shape[0] and offsets.shape[1] >= 2:
-            finite = np.isfinite(offsets[:, 0]) & np.isfinite(offsets[:, 1])
-            offsets = offsets[finite]
-            if offsets.size:
-                disp = axis.transData.transform(offsets[:, :2])
-                sizes = np.asarray(artist.get_sizes(), dtype=float)
-                max_size = float(np.nanmax(sizes)) if sizes.size else 36.0
-                radius_pt = max(max_size, 1.0) ** 0.5 / 2.0
-                radius_px = radius_pt * axis.figure.dpi / 72.0 + 2.0
-                from matplotlib.transforms import Bbox
-                return Bbox.from_extents(
-                    float(np.min(disp[:, 0]) - radius_px),
-                    float(np.min(disp[:, 1]) - radius_px),
-                    float(np.max(disp[:, 0]) + radius_px),
-                    float(np.max(disp[:, 1]) + radius_px),
-                )
-    except Exception:
-        pass
-    return None
-
-
-def _legend_overlaps_data(legend, data_artists, figure, axis) -> bool:
-    """Return True if the legend touches any explicitly tracked data artist."""
-    figure.canvas.draw()
-    renderer = figure.canvas.get_renderer()
-    legend_bbox = legend.get_window_extent(renderer=renderer)
-    for artist in data_artists:
-        if artist is None or not getattr(artist, "get_visible", lambda: True)():
-            continue
-        bbox = _artist_display_bbox(artist, renderer, axis)
-        if bbox is not None and legend_bbox.overlaps(bbox):
-            return True
-    return False
-
-
-def _save_plot_threeways(
-    figure,
-    axis,
-    *,
-    handles,
-    output_path: Path,
-    ncol: int = 2,
-):
-    """Always save with-legend, no-legend, and legend-only variants."""
-    labels = [handle.get_label() for handle in handles]
-    legend_artist = None
-    if handles:
-        legend_artist = axis.legend(handles=handles, loc="best", ncol=ncol)
-
-    figure.tight_layout()
-
-    no_legend_path = output_path.with_name(output_path.stem + "_no_legend.png")
-    legend_path = output_path.with_name(output_path.stem + "_legend.png")
-
-    # 1) Main plot with legend.
-    figure.savefig(output_path, dpi=SAVE_DPI, bbox_inches="tight")
-
-    # 2) Same plot without legend.
-    if legend_artist is not None:
-        legend_artist.remove()
-    figure.savefig(no_legend_path, dpi=SAVE_DPI, bbox_inches="tight")
-
-    # 3) Legend only, using the exact same handles/labels/default typography.
-    if handles:
-        _save_legend_only(handles, labels, legend_path, ncol=ncol)
-
-    return no_legend_path, legend_path if handles else None
-
-def _plot_across_circuit_bar(
-    vectors: dict[tuple[str, str, str], list[float]],
-    *,
-    methods: tuple[str, ...],
-    output_path: Path,
-    title_prefix: str,
-    depth_summary: str,
-):
-    figure, axis = plt.subplots(figsize=AGGREGATE_BAR_FIGSIZE)
-    noises = list(NOISE_PROFILES)
-    x_base = np.arange(len(noises), dtype=float)
-    series = _series_order(methods)
-    offsets = np.linspace(
-        -AGGREGATE_CLUSTER_SPAN / 2.0,
-        AGGREGATE_CLUSTER_SPAN / 2.0,
-        len(series),
-    )
-
-    legend_handles = []
-    data_artists = []
-    for index, (method, fit_key, fit_label, _marker) in enumerate(series):
-        style = gate_plotter._method_style(method)
-        facecolor = style["color"]
-        edgecolor = "black" if fit_key == "linear" else _darken_color(facecolor)
-        means = []
-        stds = []
-        for noise in noises:
-            values = np.asarray(vectors[(noise, method, fit_key)], dtype=float)
-            means.append(float(np.mean(values)))
-            stds.append(float(np.std(values, ddof=AGGREGATE_STD_DDOF)))
-
-        bar_container = axis.bar(
-            x_base + offsets[index],
-            means,
-            width=AGGREGATE_BAR_WIDTH,
-            yerr=stds,
-            capsize=3,
-            color=facecolor,
-            edgecolor=edgecolor,
-            linewidth=1.8,
-            alpha=0.86,
-            error_kw={"elinewidth": 1.1, "capthick": 1.1},
-            zorder=3,
-        )
-        data_artists.extend(list(bar_container.patches))
-        if getattr(bar_container, "errorbar", None) is not None:
-            errorbar = bar_container.errorbar
-            data_line, caplines, barlinecols = errorbar.lines
-            if data_line is not None:
-                data_artists.append(data_line)
-            data_artists.extend(list(caplines))
-            data_artists.extend(list(barlinecols))
-        legend_handles.append(
-            Patch(
-                facecolor=facecolor,
-                edgecolor=edgecolor,
-                linewidth=1.8,
-                label=f"{style['label']} {fit_label}",
-            )
-        )
-
-    axis.set_xticks(x_base)
-    axis.set_xticklabels([NOISE_PROFILES[key]["label"] for key in noises])
-    axis.set_ylabel(
-        r"Mean absolute ZNE error $|E_{\mathrm{ZNE}}-E_{\mathrm{ideal}}|$"
-        "\n(error bar: SD across 4 circuit types)"
-    )
-    axis.set_xlabel("Noise model")
-    axis.set_title(
-        f"{title_prefix}\nMean ± SD across Random, HEA-CZ, HEA-CRZ, and HEA-RZZ\n"
-        f"Depths in this round: {depth_summary}",
-        fontweight="bold",
-    )
-    axis.grid(True, axis="y", alpha=0.3, zorder=0)
-    axis.set_xlim(-0.55, len(noises) - 0.45)
-    figure.tight_layout()
-    _save_plot_threeways(
-        figure,
-        axis,
-        handles=legend_handles,
-        output_path=output_path,
-        ncol=2,
-    )
-    if SHOW_PLOTS:
-        plt.show()
-    else:
-        plt.close(figure)
-
-
-
-def _aggregate_max_individual_error(
-    vectors: dict[tuple[str, str, str], list[float]],
-) -> float:
-    """Largest finite individual circuit-family absolute error in an aggregate."""
-    finite_values: list[float] = []
-    for values in vectors.values():
-        array = np.asarray(values, dtype=float)
-        finite_values.extend(array[np.isfinite(array)].tolist())
-    return float(max(finite_values)) if finite_values else float("nan")
-
-
-def _broken_bar_display_limits(
-    vectors: dict[tuple[str, str, str], list[float]],
-    methods: tuple[str, ...],
-) -> tuple[float, float]:
-    """Choose a compact y-range using only non-pathological bar series."""
-    normal_upper: list[float] = []
-    normal_lower: list[float] = []
-    for noise in NOISE_PROFILES:
+            methods = METHOD_ORDER
         for method in methods:
-            for fit_key in ("exponential", "linear"):
-                values = np.asarray(vectors[(noise, method, fit_key)], dtype=float)
-                values = values[np.isfinite(values)]
-                if values.size == 0:
-                    continue
-                # A series is considered pathological for display scaling when
-                # any of its four circuit-family errors reaches the trigger.
-                if float(np.max(values)) >= BROKEN_BAR_ERROR_THRESHOLD:
-                    continue
-                mean = float(np.mean(values))
-                std = float(np.std(values, ddof=AGGREGATE_STD_DDOF))
-                normal_upper.append(mean + std)
-                normal_lower.append(mean - std)
-
-    if normal_upper:
-        ymax = max(BROKEN_BAR_MIN_YMAX, BROKEN_BAR_HEADROOM * max(normal_upper))
-        ymin_raw = min([0.0, *normal_lower]) if normal_lower else 0.0
-        # Preserve a small amount of negative room only when ordinary SD bars
-        # actually cross zero. Absolute-error means themselves remain >= 0.
-        ymin = 1.08 * ymin_raw if ymin_raw < 0 else 0.0
-    else:
-        # Extremely unusual case: every series is pathological. Keep a compact
-        # diagnostic window anchored to the user-selected threshold.
-        ymin = 0.0
-        ymax = BROKEN_BAR_ERROR_THRESHOLD
-    if ymax <= ymin:
-        ymax = ymin + BROKEN_BAR_MIN_YMAX
-    return ymin, ymax
+            for fit in FIT_ORDER:
+                needed.append((category,method,fit))
+    return needed
 
 
-def _draw_bar_break(axis, *, x: float, width: float, y: float, edgecolor) -> None:
-    """Draw a publication-style zigzag break across a truncated bar."""
-    dx = width * 0.48
-    amp = max(abs(axis.get_ylim()[1] - axis.get_ylim()[0]) * 0.012, 1e-6)
-    xs = np.array([x - dx, x - dx / 2, x, x + dx / 2, x + dx])
-    ys = np.array([y - amp, y + amp, y - amp, y + amp, y - amp])
-    # White under-stroke creates a visible cut through the filled bar.
-    axis.plot(xs, ys, color="white", linewidth=4.5, zorder=8, solid_capstyle="round")
-    axis.plot(xs, ys, color=edgecolor, linewidth=1.5, zorder=9, solid_capstyle="round")
+def depths_note(family: int, fixed: int) -> str:
+    if family == 1:
+        groups = [f"D{r}=" + "/".join(str(expected_depth(fixed,u,r)) for u in CIRCUITS) for r in ROUNDS]
+        return "Actual depths (Random/CZ/CRZ/RZZ): " + ";  ".join(groups)
+    if family == 2:
+        groups = [f"{n}q=" + "/".join(str(expected_depth(n,u,fixed)) for u in CIRCUITS) for n in QUBITS]
+        return "Actual depths (Random/CZ/CRZ/RZZ): " + ";  ".join(groups)
+    if family == 3:
+        return "Each bar: four circuit families x four depth levels (N=16). Local only for 2q and 3q."
+    if family == 4:
+        return "Depth index follows circuit-specific schedules. Depth/Global: N=16 (2q-5q); Local: N=8 (2q-3q)."
+    raise ValueError(family)
 
 
-def _plot_across_circuit_bar_broken(
-    vectors: dict[tuple[str, str, str], list[float]],
-    *,
-    methods: tuple[str, ...],
-    output_path: Path,
-    title_prefix: str,
-    depth_summary: str,
-):
-    """Readable companion bar plot with pathological bars visually truncated.
+def figure_xlabel(family: int) -> str:
+    # Deliberately no plot title: Figure type and condition are in the PNG name.
+    if family in (1, 4):
+        return "Depth level (D1-D4; circuit-specific depth)"
+    return "Number of logical qubits"
 
-    Statistics are NOT altered. Only the drawing is clipped. Truncated bars are
-    marked with a zigzag and annotated with the actual mean ± SD.
+
+def darker(color: str, factor: float = .57):
+    return tuple(float(c * factor) for c in to_rgb(color))
+
+
+def draw_wave(axis, x: float, width: float, y: float, color):
+    dx = width * .48
+    rng = axis.get_ylim()[1] - axis.get_ylim()[0]
+    amp = max(rng * .012, 1.e-8)
+    xs = np.linspace(x-dx, x+dx, 5)
+    ys = np.array([y-amp,y+amp,y-amp,y+amp,y-amp])
+    axis.plot(xs,ys,color="white",linewidth=4.5,zorder=9,solid_capstyle="round")
+    axis.plot(xs,ys,color=color,linewidth=1.55,zorder=10,solid_capstyle="round")
+
+
+def annotate_bar(axis, *, x: float, stat: BarStat, mode: str,
+                 pathological: bool, ymax: float, font_size: float) -> None:
+    """Use exactly ONE annotation per bar, never superimpose two labels.
+
+    Type 1: show actual mean +/- SD when the bar is broken, OR if any
+            extrapolation in its cohort is outside [-1, 1].  Never show N/M.
+    Type 2: show N/M for rejected estimates, never mean +/- SD text.
+
+    An opaque white backing keeps grid/errorbar artifacts from showing through
+    characters (the earlier translucent backing caused gray ghosting).
     """
-    figure, axis = plt.subplots(figsize=AGGREGATE_BAR_FIGSIZE)
-    noises = list(NOISE_PROFILES)
-    x_base = np.arange(len(noises), dtype=float)
-    series = _series_order(methods)
-    offsets = np.linspace(
-        -AGGREGATE_CLUSTER_SPAN / 2.0,
-        AGGREGATE_CLUSTER_SPAN / 2.0,
-        len(series),
-    )
-    ymin, ymax = _broken_bar_display_limits(vectors, methods)
-    yrange = ymax - ymin
-    axis.set_ylim(ymin, ymax)
-
-    legend_handles = []
-    for index, (method, fit_key, fit_label, _marker) in enumerate(series):
-        style = gate_plotter._method_style(method)
-        facecolor = style["color"]
-        edgecolor = "black" if fit_key == "linear" else _darken_color(facecolor)
-
-        for noise_index, noise in enumerate(noises):
-            values = np.asarray(vectors[(noise, method, fit_key)], dtype=float)
-            values = values[np.isfinite(values)]
-            if values.size == 0:
-                continue
-            mean = float(np.mean(values))
-            std = float(np.std(values, ddof=AGGREGATE_STD_DDOF))
-            pathological = float(np.max(values)) >= BROKEN_BAR_ERROR_THRESHOLD
-            position = float(x_base[noise_index] + offsets[index])
-
-            if not pathological:
-                axis.bar(
-                    [position], [mean],
-                    width=AGGREGATE_BAR_WIDTH,
-                    yerr=[std],
-                    capsize=3,
-                    color=facecolor,
-                    edgecolor=edgecolor,
-                    linewidth=1.8,
-                    alpha=0.86,
-                    error_kw={"elinewidth": 1.1, "capthick": 1.1},
-                    zorder=3,
-                )
-                continue
-
-            # Keep the real statistics, but draw the bar only inside the compact
-            # display window. The numeric annotation reports the true values.
-            drawn_top = ymin + 0.80 * yrange
-            displayed_height = max(0.0, drawn_top - max(0.0, ymin))
-            axis.bar(
-                [position], [displayed_height],
-                bottom=max(0.0, ymin),
-                width=AGGREGATE_BAR_WIDTH,
-                color=facecolor,
-                edgecolor=edgecolor,
-                linewidth=1.8,
-                alpha=0.86,
-                zorder=3,
-            )
-            _draw_bar_break(
-                axis,
-                x=position,
-                width=AGGREGATE_BAR_WIDTH,
-                y=drawn_top - 0.035 * yrange,
-                edgecolor=edgecolor,
-            )
-            axis.text(
-                position,
-                ymin + 0.94 * yrange,
-                f"{mean:.3g} ± {std:.3g}",
-                ha="center",
-                va="top",
-                fontsize=8.5,
-                rotation=90 if len(series) >= 6 else 0,
-                bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.82, "pad": 1.0},
-                zorder=10,
-            )
-
-        legend_handles.append(
-            Patch(
-                facecolor=facecolor,
-                edgecolor=edgecolor,
-                linewidth=1.8,
-                label=f"{style['label']} {fit_label}",
-            )
-        )
-
-    axis.set_xticks(x_base)
-    axis.set_xticklabels([NOISE_PROFILES[key]["label"] for key in noises])
-    axis.set_ylabel(
-        r"Mean absolute ZNE error $|E_{\mathrm{ZNE}}-E_{\mathrm{ideal}}|$"
-        "\n(error bar: SD across 4 circuit types)"
-    )
-    axis.set_xlabel("Noise model")
-    axis.set_title(
-        f"{title_prefix}\nMean ± SD across Random, HEA-CZ, HEA-CRZ, and HEA-RZZ\n"
-        f"Depths in this round: {depth_summary}\n"
-        f"Truncated view: zigzag bars have individual error ≥ {BROKEN_BAR_ERROR_THRESHOLD:g}",
-        fontweight="bold",
-    )
-    axis.grid(True, axis="y", alpha=0.3, zorder=0)
-    axis.set_xlim(-0.55, len(noises) - 0.45)
-    figure.tight_layout()
-    _save_plot_threeways(
-        figure,
-        axis,
-        handles=legend_handles,
-        output_path=output_path,
-        ncol=2,
-    )
-    if SHOW_PLOTS:
-        plt.show()
+    if mode == "type1":
+        if not (pathological or stat.out_of_range > 0):
+            return
+        assert stat.mean is not None and stat.std is not None
+        label = f"{stat.mean:.3g} ± {stat.std:.3g}"
+        if pathological:
+            y = ymax * .965
+            valign = "top"
+        else:
+            # Place above the actual mean +/- SD error cap when possible.
+            cap = stat.mean + stat.std
+            if cap < ymax * .70:
+                y = cap + ymax * .035
+                valign = "bottom"
+            else:
+                y = ymax * .965
+                valign = "top"
+    elif mode == "type2":
+        if stat.excluded == 0:
+            return
+        label = f"{stat.excluded}/{stat.total}"
+        if stat.retained == 0:
+            y = ymax * .08
+        else:
+            assert stat.mean is not None and stat.std is not None
+            y = min(ymax * .78, stat.mean + stat.std + ymax * .045)
+        valign = "bottom"
     else:
-        plt.close(figure)
+        raise ValueError(f"Unknown plotting mode {mode!r}")
+
+    axis.text(x, y, label, fontsize=font_size, ha="center", va=valign,
+              rotation=90, color="#181818", zorder=12, clip_on=True,
+              bbox={"facecolor": "white", "alpha": 1.0,
+                    "edgecolor": "none", "pad": .7})
 
 
-def _plot_across_circuit_box(
-    vectors: dict[tuple[str, str, str], list[float]],
-    *,
-    methods: tuple[str, ...],
-    output_path: Path,
-    title_prefix: str,
-    depth_summary: str,
-):
-    figure, axis = plt.subplots(figsize=AGGREGATE_BOX_FIGSIZE)
-    noises = list(NOISE_PROFILES)
-    x_base = np.arange(len(noises), dtype=float)
-    series = _series_order(methods)
-    offsets = np.linspace(
-        -AGGREGATE_CLUSTER_SPAN / 2.0,
-        AGGREGATE_CLUSTER_SPAN / 2.0,
-        len(series),
-    )
-
-    legend_handles = []
-    data_artists = []
-    jitter = np.linspace(-0.022, 0.022, len(CIRCUIT_ORDER))
-    for index, (method, fit_key, fit_label, marker) in enumerate(series):
-        style = gate_plotter._method_style(method)
-        facecolor = style["color"]
-        edgecolor = "black" if fit_key == "linear" else _darken_color(facecolor)
-
-        for noise_index, noise in enumerate(noises):
-            values = np.asarray(vectors[(noise, method, fit_key)], dtype=float)
-            position = x_base[noise_index] + offsets[index]
-            box = axis.boxplot(
-                [values],
-                positions=[position],
-                widths=AGGREGATE_BAR_WIDTH * 0.92,
-                patch_artist=True,
-                showfliers=False,
-                manage_ticks=False,
-                boxprops={
-                    "facecolor": mcolors.to_rgba(facecolor, 0.22),
-                    "edgecolor": edgecolor,
-                    "linewidth": 1.7,
-                },
-                whiskerprops={"color": edgecolor, "linewidth": 1.2},
-                capprops={"color": edgecolor, "linewidth": 1.2},
-                medianprops={"color": edgecolor, "linewidth": 1.8},
-            )
-            for artists in box.values():
-                data_artists.extend(list(artists))
-            scatter_artist = axis.scatter(
-                position + jitter,
-                values,
-                color=facecolor,
-                marker=marker,
-                s=style["extrapolated_marker_size"] * 0.62,
-                linewidths=1.1,
-                zorder=5,
-            )
-            data_artists.append(scatter_artist)
-
-        legend_handles.append(
-            Line2D(
-                [0], [0],
-                color="none",
-                marker=marker,
-                markerfacecolor=facecolor,
-                markeredgecolor=facecolor,
-                markersize=8,
-                label=f"{style['label']} {fit_label}",
-            )
+def render_figure(*, family: int, fixed: int, mode: str,
+                  categories, points: dict, output: Path, save_dpi: int):
+    figure, axis = plt.subplots(figsize=(14, 7.2))
+    axis.set_axisbelow(True)
+    axis.grid(axis="y", alpha=.20, linestyle="--")
+    x = np.arange(len(categories), dtype=float)
+    # Keep all methods in the legend, but center each x-axis group over only
+    # the folding methods defined for that logical qubit count.  In Figure 3,
+    # 4q and 5q have no Local folding, so their four bars occupy the CENTER
+    # rather than leaving a six-bar grid with two empty slots.
+    methods_here = allowed_methods(fixed) if family == 1 else METHOD_ORDER
+    series = [(method,fit) for method in methods_here for fit in FIT_ORDER]
+    width = .115
+    gaps = width * 1.16
+    positions: dict[tuple[int,str,str], float] = {}
+    for xi, category in enumerate(categories):
+        method_choices = (
+            allowed_methods(category) if family in (2, 3) else methods_here
         )
+        category_series = [(method,fit) for method in method_choices for fit in FIT_ORDER]
+        offsets = (np.arange(len(category_series)) - (len(category_series)-1)/2) * gaps
+        for offset, (method,fit) in zip(offsets, category_series):
+            positions[(category,method,fit)] = float(x[xi]+offset)
+    finite_stats = [stat for stat in points.values() if stat.mean is not None]
 
-    axis.set_xticks(x_base)
-    axis.set_xticklabels([NOISE_PROFILES[key]["label"] for key in noises])
-    axis.set_ylabel(
-        r"Absolute ZNE error $|E_{\mathrm{ZNE}}-E_{\mathrm{ideal}}|$"
-        "\n(4 circuit-type values per box)"
-    )
-    axis.set_xlabel("Noise model")
-    axis.set_title(
-        f"{title_prefix}\nDistribution across Random, HEA-CZ, HEA-CRZ, and HEA-RZZ\n"
-        f"Depths in this round: {depth_summary}",
-        fontweight="bold",
-    )
-    axis.grid(True, axis="y", alpha=0.3, zorder=0)
-    axis.set_xlim(-0.55, len(noises) - 0.45)
-    figure.tight_layout()
-    _save_plot_threeways(
-        figure,
-        axis,
-        handles=legend_handles,
-        output_path=output_path,
-        ncol=2,
-    )
-    if SHOW_PLOTS:
-        plt.show()
+    if mode == "type1":
+        regular = [s for s in finite_stats if s.max_error is not None and
+                   s.max_error < BROKEN_BAR_ERROR_THRESHOLD]
+        if regular:
+            peak = max(s.mean+s.std for s in regular)
+            ymax = max(.045,peak * 1.58)
+        else:
+            ymax = BROKEN_BAR_ERROR_THRESHOLD
+        # If some pathological points exist, keep a compact view for the rest.
+        # Plotting waves conveys that the bar height is schematic, not a number.
     else:
-        plt.close(figure)
+        peak = max((s.mean+s.std for s in finite_stats), default=.045)
+        ymax = max(.045,peak * 1.62)
+    axis.set_ylim(0, ymax)
+    ymin,ymax = axis.get_ylim()
+    yspan = ymax-ymin
+
+    for index,(method,fit) in enumerate(series):
+        base_color = METHOD_COLORS[method]
+        outline = darker(base_color)
+        for xi,category in enumerate(categories):
+            stat = points.get((category,method,fit))
+            if stat is None:
+                continue
+            xx = positions[(category,method,fit)]
+            if stat.retained == 0:
+                # Do not fabricate a zero-height bar when all estimates fail.
+                axis.plot([xx],[.01*yspan],marker="x",color="firebrick",markersize=5,zorder=7)
+                annotate_bar(axis, x=xx, stat=stat, mode=mode,
+                             pathological=False, ymax=ymax, font_size=8)
+                continue
+            assert stat.mean is not None and stat.std is not None
+            pathological = (mode=="type1" and stat.max_error is not None and
+                            stat.max_error >= BROKEN_BAR_ERROR_THRESHOLD)
+            if pathological:
+                display_height = ymax * .72
+                axis.bar([xx],[display_height],width=width,color=base_color,
+                         edgecolor=outline,linewidth=1.05,alpha=.88,
+                         hatch=FIT_HATCHES[fit],zorder=3)
+                draw_wave(axis,xx,width,ymax*.685,outline)
+            else:
+                axis.bar([xx],[stat.mean],yerr=[stat.std],width=width,
+                         color=base_color,edgecolor=outline,linewidth=1.05,
+                         hatch=FIT_HATCHES[fit],alpha=.88,capsize=2.6,zorder=3,
+                         error_kw={"elinewidth":1.0,"capthick":1.0})
+            annotate_bar(axis, x=xx, stat=stat, mode=mode,
+                         pathological=pathological, ymax=ymax, font_size=8.5)
+
+    if family in (1,4):
+        labels = [f"D{c}" for c in categories]
+    else:
+        labels = [f"{c}q" for c in categories]
+    axis.set_xticks(x)
+    axis.set_xticklabels(labels)
+    # Apply identical styling to every tick on BOTH axes, rather than using
+    # set_xticklabels for x and tick_params for y (different code paths).
+    axis.tick_params(axis="both", which="major", labelsize=TICK_LABEL_FONT_SIZE)
+    for tick_label in (*axis.get_xticklabels(), *axis.get_yticklabels()):
+        tick_label.set_fontfamily(TICK_LABEL_FONT_FAMILY)
+        tick_label.set_fontsize(TICK_LABEL_FONT_SIZE)
+        tick_label.set_fontweight(TICK_LABEL_FONT_WEIGHT)
+        tick_label.set_fontstyle("normal")
+    # Keep scientific-notation offset text consistent if Matplotlib adds it.
+    for offset_text in (axis.xaxis.get_offset_text(), axis.yaxis.get_offset_text()):
+        offset_text.set_fontfamily(TICK_LABEL_FONT_FAMILY)
+        offset_text.set_fontsize(TICK_LABEL_FONT_SIZE)
+        offset_text.set_fontweight(TICK_LABEL_FONT_WEIGHT)
+    axis.set_xlim(-.57,len(categories)-.43)
+    # No plot title or top-right labels explanation; numeric excluded/total
+    # annotations on the individual Type 2 bars are preserved.
+    axis.set_xlabel(figure_xlabel(family), fontsize=AXIS_LABEL_FONT_SIZE, labelpad=9)
+    axis.set_ylabel(r"Mean absolute ZNE error  $|E_{\mathrm{ZNE}}-E_{\mathrm{ideal}}|$",
+                    fontsize=AXIS_LABEL_FONT_SIZE, labelpad=10)
+
+    legend = [Patch(facecolor=METHOD_COLORS[method],edgecolor=darker(METHOD_COLORS[method]),
+                    hatch=FIT_HATCHES[fit],label=f"{METHOD_LABELS[method]} | {FIT_LABELS[fit]}")
+              for method,fit in series]
+    # Figures 3 and 4 have no footnote below the x-axis.  Figures 1 and 2
+    # retain their circuit-specific depth schedule annotation.
+    if family in (3,4):
+        figure.subplots_adjust(left=.105, right=.985, top=.965, bottom=.265)
+    else:
+        footnote = depths_note(family,fixed)
+        figure.text(.5, .030, footnote, ha="center", va="center", fontsize=9.3, color="#4d4d4d")
+        figure.subplots_adjust(left=.105, right=.985, top=.965, bottom=.32)
+    axis.legend(handles=legend, loc="upper center", bbox_to_anchor=(.5, -.20),
+                ncol=(2 if len(legend) == 4 else 3), fontsize=LEGEND_FONT_SIZE,
+                columnspacing=1.2, labelspacing=.65, handlelength=1.5, frameon=False)
+
+    # Only the standard figure with an outside legend is exported.
+    output.parent.mkdir(parents=True,exist_ok=True)
+    figure.savefig(output,dpi=save_dpi,bbox_inches="tight")
+    plt.close(figure)
 
 
-def _generate_circuit_aggregate_plots(
-    records: list[ReportRecord],
-    ideal_values: dict[tuple[int, str, int], float],
-    output_root: Path,
-    *,
-    dry_run: bool,
-):
-    round_lookup = _depth_round_lookup(records)
-    groups, unassigned, duplicates = _build_circuit_aggregate_groups(
-        records, round_lookup
-    )
-    generated: list[dict[str, Any]] = []
-    skipped: list[dict[str, Any]] = []
 
-    for group_key in sorted(groups):
-        num_qubits, round_index, platform_tag = group_key
+# ------------------------------------------------------------
+# Figure 5: Overall folding-method summary, full reports only
+# ------------------------------------------------------------
+def build_figure5_statistics(records: dict, ideals: dict[str, float]):
+    """Collect RAW errors once per report, never average previously averaged bars.
 
-        # 1q has only the random_type circuit in this experiment.  It should
-        # produce its ordinary per-case figure, but not a four-circuit mean/SD
-        # or box plot.
-        if num_qubits == 1:
-            skipped.append({
-                "group": group_key,
-                "reason": "1q excluded from across-circuit statistics: only random_type is available",
-            })
-            continue
+    Circuit/Global: 2-5q x D1-D4 x 4 circuit families = 64 each.
+    Local: 2-3q x D1-D4 x 4 circuit families = 32.
+    All observations and exact noiseless reference values are mandatory.
+    """
+    observations: dict[tuple[str, str], list[Observation]] = {}
+    missing: list[dict[str, Any]] = []
+    for method in METHOD_ORDER:
+        ns = (2, 3) if method == "local" else QUBITS
+        expected_count = len(ns) * len(ROUNDS) * len(CIRCUITS)
+        for fit in FIT_ORDER:
+            result: list[Observation] = []
+            for n in ns:
+                for rnd in ROUNDS:
+                    group, reason = atomic_group(n, rnd, method, fit, records, ideals)
+                    if group is None:
+                        missing.append({"method": method, "fit": fit,
+                                        "qubits": n, "depth_round": rnd,
+                                        "reason": reason})
+                    else:
+                        result.extend(group)
+            if len(result) != expected_count:
+                # No partial cohort may contribute to Figure 5.
+                if not any(d["method"] == method and d["fit"] == fit for d in missing):
+                    missing.append({"method": method, "fit": fit,
+                                    "reason": f"expected {expected_count} reports, got {len(result)}"})
+            observations[(method, fit)] = result
+    if missing:
+        return {}, missing
 
-        circuit_records = groups[group_key]
-        vectors, problems, aggregate_methods = _aggregate_error_values(circuit_records, ideal_values)
-        if vectors is None:
-            skipped.append({
-                "group": group_key,
-                "reason": "requires all 4 circuit types and at least 2 folding methods complete across all 3 target noises, with successful fits and ideal values",
-                **problems,
-            })
-            continue
-
-        basename = _safe_tag(
-            f"{num_qubits}q_round{round_index}_{platform_tag}_acrosscircuit"
-        )
-        group_directory = output_root / "across_circuit_statistics" / basename
-        bar_path = group_directory / f"{basename}_mean_std_bar.png"
-        broken_bar_path = group_directory / f"{basename}_mean_std_bar_broken.png"
-        box_path = group_directory / f"{basename}_boxplot.png"
-        depth_summary = _aggregate_depth_summary(circuit_records)
-        max_individual_error = _aggregate_max_individual_error(vectors)
-        make_broken_bar = bool(
-            np.isfinite(max_individual_error)
-            and max_individual_error >= BROKEN_BAR_ERROR_THRESHOLD
-        )
-        title_prefix = f"{num_qubits}q | depth round {round_index} | {platform_tag}"
-
-        stats: dict[str, Any] = {}
-        for (noise, method, fit_key), values in vectors.items():
-            array = np.asarray(values, dtype=float)
-            stats[f"{noise}|{method}|{fit_key}"] = {
-                "values_by_circuit": {
-                    unitary: float(value)
-                    for unitary, value in zip(CIRCUIT_ORDER, array.tolist())
-                },
-                "mean": float(np.mean(array)),
-                "std": float(np.std(array, ddof=AGGREGATE_STD_DDOF)),
-                "n": int(len(array)),
-            }
-
-        item = {
-            "group": group_key,
-            "basename": basename,
-            "num_qubits": num_qubits,
-            "depth_round": round_index,
-            "platform_tag": platform_tag,
-            "circuit_order": list(CIRCUIT_ORDER),
-            "aggregate_methods": list(aggregate_methods),
-            "depth_summary": depth_summary,
-            "std_ddof": AGGREGATE_STD_DDOF,
-            "statistics": stats,
-            "max_individual_absolute_error": max_individual_error,
-            "broken_bar_threshold": BROKEN_BAR_ERROR_THRESHOLD,
-            "broken_bar_generated": make_broken_bar,
-            "bar_output": str(bar_path),
-            "bar_no_legend_output": str(bar_path.with_name(bar_path.stem + "_no_legend.png")),
-            "bar_legend_output": str(bar_path.with_name(bar_path.stem + "_legend.png")),
-            "broken_bar_output": str(broken_bar_path) if make_broken_bar else None,
-            "broken_bar_no_legend_output": (
-                str(broken_bar_path.with_name(broken_bar_path.stem + "_no_legend.png"))
-                if make_broken_bar else None
-            ),
-            "broken_bar_legend_output": (
-                str(broken_bar_path.with_name(broken_bar_path.stem + "_legend.png"))
-                if make_broken_bar else None
-            ),
-            "box_output": str(box_path),
-            "box_no_legend_output": str(box_path.with_name(box_path.stem + "_no_legend.png")),
-            "box_legend_output": str(box_path.with_name(box_path.stem + "_legend.png")),
+    by_mode: dict[str, dict[tuple[str, str], BarStat]] = {}
+    for mode in ("type1", "type2"):
+        by_mode[mode] = {
+            (method, fit): aggregate(observations[(method, fit)], filtered=(mode == "type2"))
+            for method in METHOD_ORDER for fit in FIT_ORDER
         }
-
-        if not dry_run:
-            group_directory.mkdir(parents=True, exist_ok=True)
-            _plot_across_circuit_bar(
-                vectors,
-                methods=aggregate_methods,
-                output_path=bar_path,
-                title_prefix=title_prefix,
-                depth_summary=depth_summary,
-            )
-            if make_broken_bar:
-                _plot_across_circuit_bar_broken(
-                    vectors,
-                    methods=aggregate_methods,
-                    output_path=broken_bar_path,
-                    title_prefix=title_prefix,
-                    depth_summary=depth_summary,
-                )
-            _plot_across_circuit_box(
-                vectors,
-                methods=aggregate_methods,
-                output_path=box_path,
-                title_prefix=title_prefix,
-                depth_summary=depth_summary,
-            )
-        generated.append(item)
-
-    return generated, skipped, unassigned, duplicates
+    return by_mode, []
 
 
-def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Create one before-weighted method-by-noise plot per case."
-    )
-    parser.add_argument("--report-directory", default=REPORT_DIRECTORY)
-    parser.add_argument("--output-directory", default=PLOT_OUTPUT_ROOT)
-    parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--allow-partial", action="store_true")
-    return parser.parse_args()
+def render_figure5(*, points: dict[tuple[str, str], BarStat], mode: str,
+                   output: Path, save_dpi: int):
+    """One folding-method cluster per x tick, Linear left, Exponential right."""
+    figure, axis = plt.subplots(figsize=(13, 7.2))
+    axis.set_axisbelow(True)
+    axis.grid(axis="y", alpha=.20, linestyle="--")
+    x = np.arange(len(METHOD_ORDER), dtype=float)
+    width = .255
+    offsets = {"linear": -.145, "exponential": .145}
+    finite_stats = [stat for stat in points.values() if stat.mean is not None]
+
+    if mode == "type1":
+        regular = [stat for stat in finite_stats if stat.max_error is not None
+                   and stat.max_error < BROKEN_BAR_ERROR_THRESHOLD]
+        if regular:
+            ymax = max(.045, max(stat.mean + stat.std for stat in regular) * 1.68)
+        else:
+            ymax = BROKEN_BAR_ERROR_THRESHOLD
+    else:
+        ymax = max(.045, max((stat.mean + stat.std for stat in finite_stats),
+                              default=.045) * 1.70)
+    axis.set_ylim(0, ymax)
+
+    for idx, method in enumerate(METHOD_ORDER):
+        color = METHOD_COLORS[method]
+        edgecolor = darker(color)
+        for fit in FIT_ORDER:
+            stat = points[(method, fit)]
+            xx = float(x[idx] + offsets[fit])
+            if stat.retained == 0:
+                # All estimators excluded: no fabricated zero-error bar.
+                axis.plot([xx], [.016*ymax], marker="x", markersize=7,
+                          color="firebrick", zorder=7)
+                annotate_bar(axis, x=xx, stat=stat, mode=mode,
+                             pathological=False, ymax=ymax, font_size=11.5)
+                continue
+            assert stat.mean is not None and stat.std is not None
+            pathological = (mode == "type1" and stat.max_error is not None
+                            and stat.max_error >= BROKEN_BAR_ERROR_THRESHOLD)
+            if pathological:
+                axis.bar([xx], [ymax*.72], width=width, color=color,
+                         edgecolor=edgecolor, linewidth=1.2, alpha=.88,
+                         hatch=FIT_HATCHES[fit], zorder=3)
+                draw_wave(axis, xx, width, ymax*.685, edgecolor)
+            else:
+                axis.bar([xx], [stat.mean], yerr=[stat.std], width=width,
+                         color=color, edgecolor=edgecolor, linewidth=1.2,
+                         hatch=FIT_HATCHES[fit], alpha=.88, capsize=4, zorder=3,
+                         error_kw={"elinewidth": 1.15, "capthick": 1.1})
+            annotate_bar(axis, x=xx, stat=stat, mode=mode,
+                         pathological=pathological, ymax=ymax, font_size=11.5)
+
+    axis.set_xticks(x)
+    axis.set_xticklabels([METHOD_LABELS[m] for m in METHOD_ORDER])
+    axis.tick_params(axis="both", which="major", labelsize=TICK_LABEL_FONT_SIZE)
+    for label in (*axis.get_xticklabels(), *axis.get_yticklabels()):
+        label.set_fontfamily(TICK_LABEL_FONT_FAMILY)
+        label.set_fontsize(TICK_LABEL_FONT_SIZE)
+        label.set_fontweight(TICK_LABEL_FONT_WEIGHT)
+        label.set_fontstyle("normal")
+    for label in (axis.xaxis.get_offset_text(), axis.yaxis.get_offset_text()):
+        label.set_fontfamily(TICK_LABEL_FONT_FAMILY)
+        label.set_fontsize(TICK_LABEL_FONT_SIZE)
+        label.set_fontweight(TICK_LABEL_FONT_WEIGHT)
+    axis.set_xlim(-.58, len(METHOD_ORDER)-.42)
+    axis.set_xlabel("Folding method", fontsize=AXIS_LABEL_FONT_SIZE, labelpad=9)
+    axis.set_ylabel(r"Mean absolute ZNE error  $|E_{\mathrm{ZNE}}-E_{\mathrm{ideal}}|$",
+                    fontsize=AXIS_LABEL_FONT_SIZE, labelpad=10)
+
+    legend = [Patch(facecolor="#9a9a9a", edgecolor="#474747",
+                    hatch=FIT_HATCHES[fit], label=FIT_LABELS[fit])
+              for fit in FIT_ORDER]
+    figure.subplots_adjust(left=.12, right=.985, top=.965, bottom=.23)
+    axis.legend(handles=legend, loc="upper center", bbox_to_anchor=(.5, -.19),
+                ncol=2, fontsize=LEGEND_FONT_SIZE, columnspacing=2.0,
+                handlelength=1.7, frameon=False)
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(output, dpi=save_dpi, bbox_inches="tight")
+    plt.close(figure)
 
 
-def main() -> int:
-    args = _parse_args()
-    report_directory = Path(args.report_directory).expanduser().resolve()
-    output_root = Path(args.output_directory).expanduser().resolve()
-    if not report_directory.is_dir():
-        raise FileNotFoundError(f"Report directory not found: {report_directory}")
+def default_ideal_template() -> dict[str,None]:
+    return {ideal_key(n,u,expected_depth(n,u,r)):None
+            for n in QUBITS for u in CIRCUITS for r in ROUNDS}
 
-    records, unreadable, ignored = _load_records(report_directory)
-    if not records:
-        raise ValueError(f"No matching report JSON files found in {report_directory}")
 
-    groups, duplicates = _build_groups(records)
-    ideal_values = _ideal_lookup(records)
-    allow_partial = bool(ALLOW_PARTIAL_GROUPS or args.allow_partial)
+def write_depth_schedule(output_root: Path):
+    with (output_root/"depth_schedule.csv").open("w",newline="",encoding="utf-8") as f:
+        w=csv.writer(f)
+        w.writerow(["logical_qubits","depth_level","random_type","hea_cz","hea_crz","hea_rzz"])
+        for n in QUBITS:
+            for r in ROUNDS:
+                w.writerow([n,r,*[expected_depth(n,u,r) for u in CIRCUITS]])
 
-    required = {
-        (method, noise)
-        for method in METHOD_ORDER
-        for noise in NOISE_PROFILES
-    }
-    generated: list[dict[str, Any]] = []
-    skipped: list[dict[str, Any]] = []
 
-    for case_key in sorted(groups):
-        num_qubits, unitary, depth, platform_tag = case_key
-        available = groups[case_key]
-        present = set(available)
-        missing = sorted(required - present)
-        methods_present = {
-            method for method, _noise in present if method in METHOD_ORDER
-        }
-        noise_present = {
-            noise for _method, noise in present if noise in NOISE_PROFILES
-        }
-        complete = required.issubset(present)
+def run(args) -> int:
+    source = Path(args.report_directory).expanduser().resolve()
+    target = Path(args.output_directory).expanduser().resolve()
+    if not source.is_dir():
+        raise FileNotFoundError(f"Report directory not found: {source}")
+    if source == target:
+        raise ValueError("Input and output directories must differ")
+    target.mkdir(parents=True,exist_ok=True)
+    records,bad,ignored=load_reports(source)
+    external=load_ideal_reference(Path(args.ideal_reference).expanduser().resolve()
+                                  if args.ideal_reference else None)
+    ideals=build_ideal_lookup(records,external)
+    template=default_ideal_template()
+    not_available={key:None for key in template if key not in ideals}
+    if not_available:
+        template_path=target/"missing_ideal_reference_template.json"
+        template_path.write_text(json.dumps(not_available,indent=2)+"\n",encoding="utf-8")
+    write_depth_schedule(target)
 
-        # A partial figure is meaningful when at least one method has data for
-        # at least two target noise models.  This also allows the 4q circuit-folding
-        # cases to be plotted before the width-folding methods finish.
-        method_noise_counts = {
-            method: sum((method, noise) in present for noise in NOISE_PROFILES)
-            for method in METHOD_ORDER
-        }
-        partial_is_meaningful = max(method_noise_counts.values(), default=0) >= 2
-        allow_partial_for_case = allow_partial
-
-        if (not complete and not allow_partial_for_case) or (
-            not complete and allow_partial_for_case and not partial_is_meaningful
-        ):
-            skipped.append({
-                "case": case_key,
-                "available_combinations": sorted(present),
-                "missing_combinations": missing,
-                "reason": (
-                    "incomplete group"
-                    if not allow_partial_for_case
-                    else "partial group has fewer than two methods or two noises"
-                ),
-            })
-            continue
-
-        selected_records = []
-        method_keys = []
-        noise_keys = []
-        for noise in NOISE_PROFILES:
-            for method in METHOD_ORDER:
-                record = available.get((method, noise))
-                if record is None:
+    figures=[]
+    skipped_bars=[]
+    rows=[]
+    for family in (1,2,3,4):
+        fixed_options=QUBITS if family==1 else ROUNDS if family==2 else (0,)
+        for fixed in fixed_options:
+            for mode in ("type1","type2"):
+                categories,points,skipped=build_points(records,ideals,family,fixed,mode)
+                name=(f"figure{family}_{fixed}q" if family==1 else
+                      f"figure{family}_D{fixed}" if family==2 else f"figure{family}")
+                basename=f"{name}_{mode}_increasing_pauli"
+                destination=target/f"figure_{family}"/(basename+".png")
+                for item in skipped:
+                    skipped_bars.append({"figure":name,"mode":mode,**item})
+                missing_required = [key for key in required_bar_keys(family,fixed) if key not in points]
+                if not points or (missing_required and not args.allow_partial_figures):
+                    figures.append({"figure":name,"mode":mode,
+                                    "status":"skipped_incomplete_or_missing_ideal",
+                                    "n_bars":0,"missing_required_bars":
+                                    [list(k) for k in missing_required]})
                     continue
-                selected_records.append(record)
-                method_keys.append(method)
-                noise_keys.append(noise)
+                render_figure(family=family,fixed=fixed,mode=mode,
+                              categories=categories,points=points,
+                              output=destination,save_dpi=args.dpi)
+                figures.append({"figure":name,"mode":mode,"status":"generated",
+                                "n_bars":len(points),"path":str(destination)})
+                for (category,method,fit),stat in sorted(points.items()):
+                    rows.append({"figure":name,"mode":mode,"x_category":category,
+                                 "folding_method":method,"fit":fit,
+                                 "n_total":stat.total,"n_excluded":stat.excluded,
+                                 "n_retained":stat.retained,
+                                 "mean_abs_error":stat.mean,"std_abs_error":stat.std,
+                                 "max_retained_error":stat.max_error})
+    # Figure 5 uses raw errors from every required source, not means from
+    # Figures 1-4.  Both types are skipped together unless all 160 expected
+    # source reports and their noiseless ideal references are present.
+    figure5_by_mode, figure5_missing = build_figure5_statistics(records, ideals)
+    if figure5_missing:
+        for mode in ("type1", "type2"):
+            figures.append({"figure": "figure5", "mode": mode,
+                            "status": "skipped_incomplete_or_missing_ideal",
+                            "n_bars": 0, "missing_required_bars": figure5_missing})
+        # Remove only previously generated Figure 5 PNGs from this output
+        # directory, so rerunning against an incomplete dataset cannot leave
+        # a misleading stale "complete" summary behind.
+        for mode in ("type1", "type2"):
+            old_figure5_png = target / "figure_5" / f"figure5_{mode}_increasing_pauli.png"
+            if old_figure5_png.is_file():
+                old_figure5_png.unlink()
+    else:
+        for mode in ("type1", "type2"):
+            points5 = figure5_by_mode[mode]
+            destination = target / "figure_5" / f"figure5_{mode}_increasing_pauli.png"
+            render_figure5(points=points5, mode=mode, output=destination,
+                           save_dpi=args.dpi)
+            figures.append({"figure": "figure5", "mode": mode,
+                            "status": "generated", "n_bars": len(points5),
+                            "path": str(destination)})
+            for (method, fit), stat in points5.items():
+                rows.append({"figure": "figure5", "mode": mode,
+                             "x_category": method, "folding_method": method,
+                             "fit": fit, "n_total": stat.total,
+                             "n_excluded": stat.excluded, "n_retained": stat.retained,
+                             "mean_abs_error": stat.mean, "std_abs_error": stat.std,
+                             "max_retained_error": stat.max_error})
 
-        basename = _safe_tag(
-            f"{num_qubits}q_{unitary}_{depth}_{platform_tag}_methods_acrossnoise"
-        )
-        group_directory = output_root / "methods_across_noise" / basename
-        output_path = group_directory / f"{basename}.png"
-        ideal = ideal_values.get((num_qubits, unitary, depth))
-
-        no_legend_output_path = group_directory / f"{basename}_no_legend.png"
-        legend_output_path = group_directory / f"{basename}_legend.png"
-        item = {
-            "comparison": "methods_across_noise",
-            "basename": basename,
-            "num_qubits": num_qubits,
-            "unitary": unitary,
-            "depth": depth,
-            "platform_tag": platform_tag,
-            "complete": complete,
-            "ideal_expectation": ideal,
-            "available_combinations": sorted(present),
-            "missing_combinations": missing,
-            "input_reports": [str(record.path) for record in selected_records],
-            "output": str(output_path),
-            "no_legend_output": str(no_legend_output_path),
-            "legend_output": str(legend_output_path),
-        }
-
-        if not args.dry_run:
-            group_directory.mkdir(parents=True, exist_ok=True)
-            actual_path = gate_plotter.generate_method_by_noise_plot(
-                [record.path for record in selected_records],
-                method_keys=method_keys,
-                noise_keys=noise_keys,
-                noise_order=tuple(NOISE_PROFILES),
-                noise_labels={
-                    key: value["label"] for key, value in NOISE_PROFILES.items()
-                },
-                output_directory=group_directory,
-                output_basename=basename,
-                title_prefix=basename,
-                method_order=METHOD_ORDER,
-                ideal_value_override=ideal,
-                save_dpi=SAVE_DPI,
-                show_plots=SHOW_PLOTS,
-                verbose=False,
-            )
-            item["output"] = str(actual_path)
-        generated.append(item)
-
-    aggregate_generated: list[dict[str, Any]] = []
-    aggregate_skipped: list[dict[str, Any]] = []
-    aggregate_unassigned: list[dict[str, Any]] = []
-    aggregate_duplicates: list[dict[str, Any]] = []
-    if GENERATE_CIRCUIT_AGGREGATE_PLOTS:
-        (
-            aggregate_generated,
-            aggregate_skipped,
-            aggregate_unassigned,
-            aggregate_duplicates,
-        ) = _generate_circuit_aggregate_plots(
-            records,
-            ideal_values,
-            output_root,
-            dry_run=bool(args.dry_run),
-        )
-
-    output_root.mkdir(parents=True, exist_ok=True)
-    manifest = {
-        "dry_run": bool(args.dry_run),
-        "report_directory": str(report_directory),
-        "output_root": str(output_root),
-        "reports_scanned": len(records),
-        "plots_planned_or_generated": len(generated),
-        "groups_skipped": len(skipped),
-        "generated": generated,
-        "skipped": skipped,
-        "circuit_aggregate_generated": aggregate_generated,
-        "circuit_aggregate_skipped": aggregate_skipped,
-        "circuit_aggregate_unassigned": aggregate_unassigned,
-        "circuit_aggregate_duplicates": aggregate_duplicates,
-        "duplicates": duplicates,
-        "unreadable_reports": unreadable,
-        "ignored_reports": ignored,
-    }
-    manifest_path = output_root / "plot_manifest.json"
-    manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-
-    mode = "planned" if args.dry_run else "generated"
-    print(f"Reports used                 : {len(records)}")
-    print(f"One-figure groups {mode:9s}: {len(generated)}")
-    print(f"Incomplete groups skipped    : {len(skipped)}")
-    print(f"Across-circuit groups {mode:9s}: {len(aggregate_generated)}")
-    print(f"Across-circuit groups skipped: {len(aggregate_skipped)}")
-    print(f"Ignored non-target reports   : {len(ignored)}")
-    print(f"Manifest                     : {manifest_path}")
-    if args.dry_run:
-        print("\nNo PNG files were created because --dry-run was used.")
+    with (target/"aggregate_statistics.csv").open("w",newline="",encoding="utf-8") as f:
+        fieldnames=["figure","mode","x_category","folding_method","fit","n_total",
+                    "n_excluded","n_retained","mean_abs_error","std_abs_error","max_retained_error"]
+        writer=csv.DictWriter(f,fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+    manifest={"report_directory":str(source),"output_directory":str(target),
+              "noise":"increasing_pauli only", "case_key":CASE_KEY,
+              "statistic":"mean absolute extrapolation error +/- population SD",
+              "out_of_range_rule":"exclude only extrapolated expectation outside [-1,1] for type2",
+              "local_method_cohort_note":"Local 2q/3q only; Figure 4 Local N=8 vs other methods N=16",
+              "reports_used":len(records),"bad_reports":bad,"ignored_report_count":len(ignored),
+              "figure5_expected_source_reports": {"circuit_folding":64,"global":64,"local":32},
+              "figure5_requires_complete_cohorts": True,
+              "ideal_values_available":len(ideals),
+              "missing_ideal_reference_count":len(not_available),
+              "figures":figures,"skipped_bars":skipped_bars}
+    (target/"plot_manifest.json").write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
+    made=sum(x["status"]=="generated" for x in figures)
+    print(f"Reports used: {len(records)} | malformed/unsuccessful: {len(bad)} | other files ignored: {len(ignored)}")
+    print(f"Ideal references available: {len(ideals)} | missing: {len(not_available)}")
+    print(f"Figures: {made} / 22 (one PNG per figure, with outside legend)")
+    if figure5_missing:
+        print(f"Figure 5 skipped (Type1 and Type2): {len(figure5_missing)} required source group(s) missing.")
+    print(f"Statistics CSV: {target/'aggregate_statistics.csv'}")
+    print(f"Manifest: {target/'plot_manifest.json'}")
+    if not_available:
+        print(f"MISSING IDEALS: Fill {target/'missing_ideal_reference_template.json'} with actual noiseless expectations")
+        print("Then run again with --ideal-reference <filled_JSON> . None is never taken as zero.")
+    if bad:
+        print(f"WARNING: {len(bad)} invalid/unsuccessful report(s); see plot_manifest.json")
     return 0
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+def main():
+    parser=argparse.ArgumentParser(description=__doc__,formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--report-directory",default=REPORT_DIRECTORY)
+    parser.add_argument("--output-directory",default=PLOT_OUTPUT_ROOT)
+    parser.add_argument("--ideal-reference",default=None,
+                        help="JSON object keyed by n-qubits/unitary/depth, e.g. {'2q_hea_cz_30':0.12}")
+    parser.add_argument("--allow-partial-figures",action="store_true",
+                        help="Default: skip an entire figure if any required 4-circuit group is missing. "
+                             "This option draws only the complete bars as a diagnostic.")
+    parser.add_argument("--dpi",type=int,default=SAVE_DPI)
+    args=parser.parse_args()
+    return run(args)
+
+
+if __name__=="__main__":
+    sys.exit(main())
