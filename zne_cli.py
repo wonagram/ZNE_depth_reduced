@@ -19,6 +19,7 @@ BACKEND_CHOICES = (
     "fake_statevector",
     "statevector",
 )
+NOISE_MODEL_CHOICES = ("eagle_r3", "heron_r3", "nighthawk_r2")
 NOISE_CHOICES = (
     "none",
     "constant_depolarizing",
@@ -26,6 +27,8 @@ NOISE_CHOICES = (
     "constant_phase_damping",
     "constant_coherent_overrotation",
     "increasing_random_pauli",
+    "increasing_exponential_random_pauli",
+    "constant_seeded_random_pauli",
     "increasing_amplitude_damping",
     "increasing_random_pauli_amplitude_damping",
 )
@@ -36,7 +39,11 @@ class CliArguments:
     machine: Optional[str]
     backend: Optional[str]
     noise: Optional[str]
+    noise_model: Optional[str]
+    bell_noise: bool
+    legacy_eagle_report_names: bool
     depolarizing_strength: Optional[float]
+    constant_pauli_depth: Optional[int]
     num_qubits: Optional[int]
     unitary: Optional[str]
     depth: Optional[int]
@@ -82,9 +89,25 @@ def parse_cli_args(description: str) -> CliArguments:
         ),
     )
     parser.add_argument(
-        "--depolarizing-strength",
-        type=float,
-        help="Constant depolarizing probability, e.g. 0.002 for 0.2%.",
+        '--noise-model', type=_lower, choices=NOISE_MODEL_CHOICES,
+        help='Hardware-inspired INITIAL Pauli noise profile (default: eagle_r3). '
+             'Independent of --noise, which selects constant/linear/exponential scaling.',
+    )
+    parser.add_argument(
+        '--bell-noise', action='store_true',
+        help='Add depth-dependent noise to Bell preparation/basis-change gates. '
+             'Only for depth-dependent custom Aer noise.',
+    )
+    parser.add_argument(
+        '--legacy-eagle-report-names', action='store_true',
+        help='ONLY Eagle r3, linear Pauli, Bell-OFF, GPU Aer: write the old '
+             'GPU_increasing_pauli filename rather than adding _eagle.',
+    )
+    parser.add_argument('--depolarizing-strength', type=float)
+    parser.add_argument(
+        '--constant-pauli-depth', type=int,
+        help='For constant_seeded_random_pauli: freeze the LINEAR noise scale '
+             'at this U-depth (default: 75, independent of circuit depth).',
     )
     parser.add_argument("--num-qubits", type=int)
     parser.add_argument("--unitary", type=str)
@@ -123,18 +146,34 @@ def parse_cli_args(description: str) -> CliArguments:
         value = getattr(namespace, name)
         if value is not None and value < 1:
             parser.error(f"--{name.replace('_', '-')} must be positive.")
+    if namespace.constant_pauli_depth is not None and namespace.constant_pauli_depth < 0:
+        parser.error('--constant-pauli-depth must be nonnegative.')
+    if (namespace.constant_pauli_depth is not None
+            and namespace.noise != 'constant_seeded_random_pauli'):
+        parser.error('--constant-pauli-depth requires --noise constant_seeded_random_pauli.')
     if (namespace.max_simulator_physical_qubits is not None
             and namespace.max_simulator_physical_qubits < 1):
         parser.error("--max-simulator-physical-qubits must be positive.")
-    if namespace.depolarizing_strength is not None:
-        if not (0.0 <= namespace.depolarizing_strength <= 1.0):
-            parser.error("--depolarizing-strength must be between 0 and 1.")
+
+    if namespace.legacy_eagle_report_names and not (
+        namespace.machine == 'gpu'
+        and namespace.backend == 'aer_simulator'
+        and namespace.noise == 'increasing_random_pauli'
+        and (namespace.noise_model is None or namespace.noise_model == 'eagle_r3')
+        and not namespace.bell_noise
+    ):
+        parser.error('--legacy-eagle-report-names is ONLY for GPU Aer Eagle r3 '
+                     'linear Pauli without Bell noise')
 
     return CliArguments(
         machine=namespace.machine,
         backend=namespace.backend,
         noise=namespace.noise,
+        noise_model=namespace.noise_model,
+        bell_noise=bool(namespace.bell_noise),
+        legacy_eagle_report_names=bool(namespace.legacy_eagle_report_names),
         depolarizing_strength=namespace.depolarizing_strength,
+        constant_pauli_depth=namespace.constant_pauli_depth,
         num_qubits=namespace.num_qubits,
         unitary=namespace.unitary,
         depth=namespace.depth,
@@ -230,7 +269,12 @@ def resolve_noise_flags(
         flags["constant_phase_damping"] = True
     elif selected == "constant_coherent_overrotation":
         flags["constant_coherent_overrotation"] = True
-    elif selected == "increasing_random_pauli":
+    elif selected in (
+        'increasing_random_pauli', 'increasing_exponential_random_pauli',
+        'constant_seeded_random_pauli',
+    ):
+        # Reuse the same seeded Dirichlet Pauli-channel implementation.
+        # The extended controller fixes the error PROBABILITY for constant mode.
         flags["increasing_random_pauli"] = True
     elif selected == "increasing_amplitude_damping":
         flags["increasing_amplitude_damping"] = True
