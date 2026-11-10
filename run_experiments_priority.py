@@ -1,4 +1,4 @@
-"""Nighthawk r2 + Eagle r3 ZNE 16-stage GPU queue; no completion barriers/timeouts.
+"""Nighthawk r2 + Eagle r3 ZNE 23-stage GPU queue; no completion barriers/timeouts.
 
 Examples:
   python -u run_experiments_priority.py --dry-run
@@ -56,6 +56,7 @@ class Job:
     method: str
     fold_factors: tuple[int, ...]
     report_tag: str
+    legacy_report_name: bool
 
     @property
     def output_directory(self) -> Path:
@@ -99,6 +100,14 @@ def expand_jobs(noise_model_selection: str = "eagle_r3") -> list[Job]:
             raise ValueError(f"Invalid noise profile {noise!r} in priority {priority}")
         tag = "GPU_" + str(cfg.NOISE_FILENAME_TAGS[noise])
         tag += "_" + {"eagle_r3": "eagle", "nighthawk_r2": "nighthawk"}[noise_model]
+        legacy = bool(stage.get('legacy_report_name', False))
+        if legacy:
+            # Historical ver2 Eagle reports use GPU_increasing_pauli (NO _eagle).
+            if (noise, noise_model, bell, mode) != (
+                'increasing_random_pauli', 'eagle_r3', False, 'local45'
+            ):
+                raise AssertionError('Legacy tag unexpectedly used outside Eagle ver2 local45')
+            tag = 'GPU_increasing_pauli'
         if bell:
             tag += "_bell_noise"
         for round_number in cfg.ROUND_ORDER:
@@ -117,6 +126,7 @@ def expand_jobs(noise_model_selection: str = "eagle_r3") -> list[Job]:
                             bell_noise=bell, round=round_number,
                             num_qubits=nq, unitary=unitary, depth=depth,
                             method=method, fold_factors=factors, report_tag=tag,
+                            legacy_report_name=legacy,
                         ))
     total = len(raw)
     return [Job(index=i + 1, total=total, **entry)
@@ -131,7 +141,7 @@ def validate_plan(jobs: list[Job]) -> None:
     stages_by_priority = {int(stage["priority"]): stage for stage in cfg.STAGES}
     if tuple(sorted(stages_by_priority)) != tuple(range(1, len(cfg.STAGES) + 1)):
         raise AssertionError("Configured priorities must be unique and consecutive")
-    expected_by_selection = {"fast": 160, "local45": 32, "full": 192}
+    expected_by_selection = {"fast": 160, "local45": 32}
     selected_priorities = {job.priority for job in jobs}
     expected_per_phase = {
         p: expected_by_selection[stage["selection"]]
@@ -170,14 +180,23 @@ def validate_plan(jobs: list[Job]) -> None:
         if "ver" in job.report_name or "bell_noisy" in job.report_name:
             raise AssertionError(f"Invalid report naming: {job.report_name}")
         desired_suffix = {"eagle_r3": "eagle", "nighthawk_r2": "nighthawk"}[job.noise_model]
-        if not job.report_tag.endswith("_" + desired_suffix + ("_bell_noise" if job.bell_noise else "")):
-            raise AssertionError(f"Noise model missing/wrong filename suffix: {job.report_name}")
+        expected_tag = ('GPU_increasing_pauli' if job.legacy_report_name else
+                        'GPU_' + cfg.NOISE_FILENAME_TAGS[job.noise] + '_' + desired_suffix
+                        + ('_bell_noise' if job.bell_noise else ''))
+        if job.report_tag != expected_tag:
+            raise AssertionError(f"Wrong filename tag: {job.report_name}")
+        if job.legacy_report_name != bool(stage.get('legacy_report_name', False)):
+            raise AssertionError(f"Legacy naming flag mismatch: {job.slug}")
+        if job.legacy_report_name and (job.directory_name != 'zne_reports_ver2' or
+               job.method != 'local' or job.num_qubits not in (4, 5) or
+               job.noise_model != 'eagle_r3' or job.noise != 'increasing_random_pauli' or
+               job.bell_noise):
+            raise AssertionError(f"Unsafe legacy job: {job.slug}")
         for other_suffix in ("eagle", "nighthawk", "heron"):
             if other_suffix != desired_suffix and ("_" + other_suffix) in job.report_tag:
                 raise AssertionError(f"Wrong hardware label in filename: {job.report_name}")
         if (job.output_directory.name != job.directory_name
-                or job.report_tag != "GPU_" + cfg.NOISE_FILENAME_TAGS[job.noise]
-                + "_" + desired_suffix + ("_bell_noise" if job.bell_noise else "")):
+                or job.report_tag != expected_tag):
             raise AssertionError("Incorrect report path/tag")
 
 
@@ -262,6 +281,10 @@ def validate_files_and_methods(jobs: list[Job]) -> None:
                  "--bell-noise", "--constant-pauli-depth", "--noise-model") :
         if flag not in cli:
             raise RuntimeError(f"Installed zne_cli.py does not support {flag}")
+    if '--legacy-eagle-report-names' not in cli:
+        raise RuntimeError('Installed zne_cli.py must support legacy Eagle report naming')
+    if 'USE_LEGACY_EAGLE_REPORT_NAMES' not in (ROOT / 'ZNE_depth_reduced_local.py').read_text(encoding='utf-8'):
+        raise RuntimeError('Installed local simulator cannot produce historical Ver2 Eagle filenames')
     for token in ("class ExtendedNoiseController", "constant_seeded_random_pauli",
                   "exponential_random_pauli", "append_bell_noise",
                   "get_pauli_initial_probabilities", "nighthawk_r2") :
@@ -290,6 +313,8 @@ def command(job: Job) -> list[str]:
         cmd += ["--constant-pauli-depth", str(cfg.CONSTANT_PAULI_DEPTH)]
     if job.bell_noise:
         cmd += ["--bell-noise"]
+    if job.legacy_report_name:
+        cmd += ["--legacy-eagle-report-names"]
     if job.method == "local":
         cmd += ["--max-simulator-physical-qubits", str(cfg.MAX_SIMULATOR_PHYSICAL_QUBITS)]
     return cmd
@@ -343,7 +368,13 @@ def validate_report(job: Job) -> tuple[bool, str]:
             "increasing_exponential_random_pauli": "exponential_capped",
             "constant_seeded_random_pauli": "constant_seeded_pauli_from_linear",
         }[job.noise]
-        assert noise["depth_scaling_model"] == expected_scaling
+        if job.legacy_report_name and 'depth_scaling_model' not in noise:
+            # Historical Ver2 Eagle schema=4 predates explicit scaling metadata.
+            # Its original linear-scaling configuration is verified below.
+            assert expected_scaling == 'linear_capped'
+            assert noise.get('selected_custom_noise_family') == 'depth_dependent'
+        else:
+            assert noise["depth_scaling_model"] == expected_scaling
         assert noise.get("hardware_inspired_noise_model", "eagle_r3") == job.noise_model
         if job.noise == "constant_seeded_random_pauli":
             config = noise["constant_seeded_random_pauli_configuration"]
@@ -353,6 +384,13 @@ def validate_report(job: Job) -> tuple[bool, str]:
             config = noise["depth_dependent_noise_configuration"]
             assert "depth_dependent_random_pauli" in noise["active_custom_noise_types"]
         assert int(config["base_seed"]) == cfg.BASE_SEED
+        if job.legacy_report_name:
+            # Fail closed if an unrelated historical report happens to share
+            # the expected filename. The linear noise parameters must match.
+            assert math.isclose(float(config['reference_depth']), 100.0, abs_tol=1e-12)
+            assert math.isclose(float(config['noise_multiplier']), 3.0, abs_tol=1e-12)
+            assert math.isclose(float(config['maximum_noise_multiplier']), 4.0, abs_tol=1e-12)
+            assert math.isclose(float(config['cap_depth']), 150.0, abs_tol=1e-12)
         actual_init = config["initial_parameters"]
         expected_init = cfg.INITIAL_PAULI_PROBABILITIES[job.noise_model]
         for key in ("p_1q", "p_2q"):
@@ -499,7 +537,8 @@ def dry_run(jobs: list[Job], show_all: bool, noise_model_selection: str) -> None
     message(f"Project path: {ROOT} | selected profile(s): {noise_model_selection}")
     message(f"GPUs: {list(GPU_IDS)} | Total jobs: {len(jobs)} | valid reports: {len(skipped)} | pending: {len(pending)}")
     message("Priority: stage -> round (1..4) -> qubit (2..5) -> unitary -> method")
-    message("SKIP RULE: exact target JSON path in this job output directory ONLY; no legacy/cross-folder scans.")
+    message("SKIP RULE: exact target JSON path only; P15 uses historical names in zne_reports_ver2.")
+    message("P1-P11 FAST (no 4/5q local); P12-P23 ONLY 4/5q local. Never block a free GPU.")
     message("No stage/round/qubit completion barriers. NO job timeouts. Fake backend disabled. Heron not scheduled.")
     message("Folds: 2/3/4q=[1,3,5,7], 5q=[1,3,5]; width upper bounds 4q=28, 5q=25.")
     skips = {j.index for j in skipped}
@@ -648,7 +687,7 @@ def run_batch(jobs: list[Job], skipped: list[Job], pending: list[Job]) -> int:
     atomic_json(session_results, results)
     ticker = threading.Thread(target=heartbeat, daemon=True)
     ticker.start()
-    message("SKIP RULE: exact target JSON path ONLY; no legacy/cross-folder scans.")
+    message("SKIP RULE: exact target JSON path ONLY; P15 = historical zne_reports_ver2 filenames.")
     message(f"START: {len(jobs)} total, {len(skipped)} existing, {len(pending)} pending; "
             f"GPUs {list(GPU_IDS)}; logs {logs}")
     # One executor for ALL selected stages. Each GPU can run a different stage.
@@ -747,7 +786,7 @@ def arguments() -> argparse.Namespace:
     parser.add_argument(
         "--noise-model", choices=cfg.NOISE_MODEL_CHOICES, default="both",
         help="Select only Nighthawk r2, only Eagle r3, or both in the configured "
-             "16-stage priority order (default: both). Heron is NOT scheduled.",
+             "23-stage priority order (default: both). Heron is NOT scheduled.",
     )
     return parser.parse_args()
 
@@ -781,6 +820,17 @@ def main() -> int:
     try:
         check_other_project_jobs()
         skipped, pending = split_existing(jobs)
+        if any(j.legacy_report_name for j in jobs):
+            # The user is RESUMING an existing Ver2 Eagle dataset (historically
+            # 13/16 4q + 16/16 5q Local reports). A missing/misplaced dataset
+            # must not silently start all 32 extremely expensive jobs.
+            already = sum(j.legacy_report_name for j in skipped)
+            if already < 29:
+                raise RuntimeError(
+                    f'Legacy Ver2 Eagle resume safety: only {already}/32 existing '
+                    'valid local reports found in zne_reports_ver2 (expected at least 29). '
+                    'Check report synchronization and original filenames before starting GPUs.'
+                )
         for stage in cfg.selected_stages(args.noise_model):
             (ROOT / stage["directory"]).mkdir(exist_ok=True)
         message("GPU preflight...")
