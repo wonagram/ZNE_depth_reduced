@@ -84,14 +84,14 @@ N = 'nighthawk_r2'
 E = 'eagle_r3'
 
 # Effective priority is the tuple ORDER, P1 through P23.
-# Written request for the first Nighthawk trio said Ver3 -> Ver2 -> Ver4.
+# First Nighthawk trio: Ver3 -> Ver4 -> Ver2.
 # The user's late-local list was written 15,13,14,12,16,...23; that
 # literal order is used below, renumbering actual dispatch priorities P12-P23.
 # No stage/round/qubit barrier: an available GPU claims the next queued job.
 STAGES = (
     stage(1,  'ver3_nighthawk', X, N, 'fast'),
-    stage(2,  'ver2_nighthawk', L, N, 'fast'),
-    stage(3,  'ver4_nighthawk', C, N, 'fast'),
+    stage(2,  'ver4_nighthawk', C, N, 'fast'),
+    stage(3,  'ver2_nighthawk', L, N, 'fast'),
     stage(4,  'ver3_eagle', X, E, 'fast'),
     stage(5,  'ver4_eagle', C, E, 'fast'),
     stage(6,  'ver2_nighthawk_bell_noise', L, N, 'fast', bell_noise=True),
