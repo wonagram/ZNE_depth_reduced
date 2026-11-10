@@ -254,6 +254,7 @@ if NOISE_MODEL != 'eagle_r3' and not USE_INCREASING_RANDOM_PAULI:
 # mean (76.09) of the 64 pre-registered round/unitary/qubit depth settings.
 CONSTANT_PAULI_DEPTH = int(override(75, _CLI_ARGS.constant_pauli_depth))
 APPLY_NOISE_TO_BELL_GATES = bool(_CLI_ARGS.bell_noise)
+USE_LEGACY_EAGLE_REPORT_NAMES = bool(_CLI_ARGS.legacy_eagle_report_names)
 if APPLY_NOISE_TO_BELL_GATES and not (
     USE_AER_SIMULATOR and (
         USE_INCREASING_RANDOM_PAULI or USE_INCREASING_AMPLITUDE_DAMPING
@@ -720,6 +721,10 @@ def _machine_name_for_report():
 
 
 def _pauli_reference_tag(tag):
+    if USE_LEGACY_EAGLE_REPORT_NAMES:
+        # Resume the original 4/5q local run in zne_reports_ver2; never
+        # introduce a new _eagle filename for historical reports.
+        return tag
     # All hardware-inspired Pauli profiles have explicit, consistent labels.
     # Order in report names: <noise>_<hardware>[_bell_noise]_<method>.json.
     profile_suffix = {

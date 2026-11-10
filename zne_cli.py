@@ -41,6 +41,7 @@ class CliArguments:
     noise: Optional[str]
     noise_model: Optional[str]
     bell_noise: bool
+    legacy_eagle_report_names: bool
     depolarizing_strength: Optional[float]
     constant_pauli_depth: Optional[int]
     num_qubits: Optional[int]
@@ -97,6 +98,11 @@ def parse_cli_args(description: str) -> CliArguments:
         help='Add depth-dependent noise to Bell preparation/basis-change gates. '
              'Only for depth-dependent custom Aer noise.',
     )
+    parser.add_argument(
+        '--legacy-eagle-report-names', action='store_true',
+        help='ONLY Eagle r3, linear Pauli, Bell-OFF, GPU Aer: write the old '
+             'GPU_increasing_pauli filename rather than adding _eagle.',
+    )
     parser.add_argument('--depolarizing-strength', type=float)
     parser.add_argument(
         '--constant-pauli-depth', type=int,
@@ -149,12 +155,23 @@ def parse_cli_args(description: str) -> CliArguments:
             and namespace.max_simulator_physical_qubits < 1):
         parser.error("--max-simulator-physical-qubits must be positive.")
 
+    if namespace.legacy_eagle_report_names and not (
+        namespace.machine == 'gpu'
+        and namespace.backend == 'aer_simulator'
+        and namespace.noise == 'increasing_random_pauli'
+        and (namespace.noise_model is None or namespace.noise_model == 'eagle_r3')
+        and not namespace.bell_noise
+    ):
+        parser.error('--legacy-eagle-report-names is ONLY for GPU Aer Eagle r3 '
+                     'linear Pauli without Bell noise')
+
     return CliArguments(
         machine=namespace.machine,
         backend=namespace.backend,
         noise=namespace.noise,
         noise_model=namespace.noise_model,
         bell_noise=bool(namespace.bell_noise),
+        legacy_eagle_report_names=bool(namespace.legacy_eagle_report_names),
         depolarizing_strength=namespace.depolarizing_strength,
         constant_pauli_depth=namespace.constant_pauli_depth,
         num_qubits=namespace.num_qubits,
