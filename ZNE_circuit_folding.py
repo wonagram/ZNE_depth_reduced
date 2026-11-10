@@ -7,6 +7,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import json
+import os
+import tempfile
 from pathlib import Path
 from scipy.optimize import curve_fit
 from qiskit.circuit import Gate
@@ -18,12 +20,15 @@ from U_config import (
     selected_unitary_summary,
 )
 from unitary_tools import (
-    NoiseController,
     append_unitary_block,
     configure_aer_simulator_device,
     make_fake_aer_backend,
 )
 from state_preparation import *
+from zne_noise_extensions import (
+    ExtendedNoiseController as NoiseController,
+    get_pauli_initial_probabilities,
+)
 
 from zne_cli import (
     override,
@@ -191,6 +196,40 @@ depth_folded_circuits = list(override(
     defaults=(True, False, False, False, False, False),
 )
 
+# New opt-in controls: independent noise shape and auxiliary Bell gates.
+USE_EXPONENTIAL_RANDOM_PAULI = (
+    _CLI_ARGS.noise == 'increasing_exponential_random_pauli'
+)
+USE_CONSTANT_SEEDED_RANDOM_PAULI = (
+    _CLI_ARGS.noise == 'constant_seeded_random_pauli'
+)
+# Select only the initial strength; the Pauli channel, seed, cap, folding,
+# gate-count axis, and fitting stay identical to the historical experiments.
+NOISE_MODEL = str(override('eagle_r3', _CLI_ARGS.noise_model))
+if NOISE_MODEL != 'eagle_r3' and not USE_INCREASING_RANDOM_PAULI:
+    raise ValueError(
+        f'--noise-model {NOISE_MODEL} requires a seeded random Pauli mode '
+        '(increasing_random_pauli, increasing_exponential_random_pauli, '
+        'or constant_seeded_random_pauli).'
+    )
+# Objective reference: the midpoint of the existing D=150 cap, near the
+# mean (76.09) of the 64 pre-registered round/unitary/qubit depth settings.
+CONSTANT_PAULI_DEPTH = int(override(75, _CLI_ARGS.constant_pauli_depth))
+APPLY_NOISE_TO_BELL_GATES = bool(_CLI_ARGS.bell_noise)
+if APPLY_NOISE_TO_BELL_GATES and not (
+    USE_AER_SIMULATOR and (
+        USE_INCREASING_RANDOM_PAULI or USE_INCREASING_AMPLITUDE_DAMPING
+    )
+):
+    raise ValueError(
+        '--bell-noise requires --backend aer_simulator and supported custom Pauli/amplitude noise.'
+    )
+# For draw/check/statevector the circuit remains noiseless regardless of flag.
+BELL_GATE_NOISE_ACTIVE = bool(
+    APPLY_NOISE_TO_BELL_GATES and USE_AER_SIMULATOR
+    and not DRAW_CIRCUIT and not USE_STATEVECTOR
+)
+
 # Historical constant-noise strengths (same semantics as before).
 depolarizing_strength = float(override(0.02, _CLI_ARGS.depolarizing_strength))
 amplitude_damping_strength = 0.02
@@ -233,8 +272,12 @@ NOISE_CAP_DEPTH = (
     / (NOISE_MULTIPLIER - 1.0)
 )
 
-P1_INITIAL = 0.000245
-P2_INITIAL = 0.006970
+# Reference Pauli error magnitudes (total probability of nonidentity terms):
+# Eagle r3: 0.0245% / 0.697%, unchanged from previously generated results.
+# Heron r3: 0.01587% / 0.1391%, supported but NOT scheduled in priority16.
+# Nighthawk r2: 0.02114% / 0.1720%, from ibm_phoenix SX/CZ medians.
+# These are reference scales, NOT full hardware-calibrated noise models.
+P1_INITIAL, P2_INITIAL = get_pauli_initial_probabilities(NOISE_MODEL)
 GAMMA1_INITIAL = 0.000112173
 GAMMA2_INITIAL = 0.002113149
 
@@ -295,6 +338,10 @@ SELECTED_COMPONENTS = select_unitary_components(
 MAX_U_DEPTH = get_unitary_max_depth(UNITARY_TYPE, NUM_U_QUBITS)
 
 NOISE_CONTROLLER = NoiseController(
+    exponential_random_pauli=USE_EXPONENTIAL_RANDOM_PAULI,
+    constant_seeded_random_pauli=USE_CONSTANT_SEEDED_RANDOM_PAULI,
+    constant_pauli_depth=CONSTANT_PAULI_DEPTH,
+    bell_gate_noise=False,  # Circuit folding has NO Bell gates: never change its U depth.
     # Historical constant mode.
     use_depolarizing=USE_CONSTANT_DEPOLARIZING,
     use_amplitude_damping=USE_CONSTANT_AMPLITUDE_DAMPING,
@@ -590,6 +637,8 @@ def _backend_mode_name():
         return "statevector_noiseless"
     if USE_FAKE_BACKEND:
         return f"fake_backend:{FAKE_BACKEND_NAME}"
+    if USE_CONSTANT_SEEDED_RANDOM_PAULI:
+        return "aer_constant_seeded_pauli"
     if _INCREASING_NOISE_ACTIVE:
         return "aer_depth_dependent_noise"
     if _CONSTANT_NOISE_ACTIVE:
@@ -621,6 +670,17 @@ def _machine_name_for_report():
     return "real_hardware" if USE_REAL_HARDWARE else str(SIMULATION_DEVICE)
 
 
+def _pauli_reference_tag(tag):
+    # All hardware-inspired Pauli profiles have explicit, consistent labels.
+    # Order in report names: <noise>_<hardware>[_bell_noise]_<method>.json.
+    profile_suffix = {
+        'eagle_r3': 'eagle',
+        'heron_r3': 'heron',
+        'nighthawk_r2': 'nighthawk',
+    }
+    return f'{tag}_{profile_suffix[NOISE_MODEL]}'
+
+
 def _noise_filename_tag():
     """Compact noise label used to prevent report-file overwrites."""
     if USE_FAKE_BACKEND:
@@ -630,10 +690,15 @@ def _noise_filename_tag():
     if USE_REAL_HARDWARE:
         return None
 
+    if USE_CONSTANT_SEEDED_RANDOM_PAULI:
+        return _pauli_reference_tag(f"constant_seeded_pauli_D{CONSTANT_PAULI_DEPTH}")
     if USE_INCREASING_RANDOM_PAULI and USE_INCREASING_AMPLITUDE_DAMPING:
-        return "increasing_pauli_amplitude_damping"
+        return _pauli_reference_tag("increasing_pauli_amplitude_damping")
     if USE_INCREASING_RANDOM_PAULI:
-        return "increasing_pauli"
+        return _pauli_reference_tag(
+            'increasing_exponential_pauli'
+            if USE_EXPONENTIAL_RANDOM_PAULI else 'increasing_pauli'
+        )
     if USE_INCREASING_AMPLITUDE_DAMPING:
         return "increasing_amplitude_damping"
 
@@ -674,6 +739,8 @@ def _execution_filename_tag():
         parts.append(_safe_filename_tag(FAKE_BACKEND_NAME))
     else:
         parts.append(_noise_filename_tag())
+    if APPLY_NOISE_TO_BELL_GATES:
+        parts.append('bell_noise')
     return "_".join(part for part in parts if part)
 
 
@@ -688,8 +755,11 @@ def _noise_report():
     if USE_AER_SIMULATOR and USE_CONSTANT_COHERENT_OVERROTATION:
         active_constant_types.append("constant_coherent_overrotation")
 
+    if USE_AER_SIMULATOR and USE_CONSTANT_SEEDED_RANDOM_PAULI:
+        active_constant_types.append('constant_seeded_random_pauli')
+
     active_increasing_types = []
-    if USE_AER_SIMULATOR and USE_INCREASING_RANDOM_PAULI:
+    if USE_AER_SIMULATOR and USE_INCREASING_RANDOM_PAULI and not USE_CONSTANT_SEEDED_RANDOM_PAULI:
         active_increasing_types.append("depth_dependent_random_pauli")
     if USE_AER_SIMULATOR and USE_INCREASING_AMPLITUDE_DAMPING:
         active_increasing_types.append("depth_dependent_amplitude_damping")
@@ -717,6 +787,21 @@ def _noise_report():
             else None
         ),
         "custom_noise_channels_applied": bool(active_custom_types),
+        # This is a hardware-INSPIRED baseline, not an Aer FakeBackend snapshot.
+        "hardware_inspired_noise_model": (
+            NOISE_MODEL if USE_AER_SIMULATOR and USE_INCREASING_RANDOM_PAULI
+            else None
+        ),
+        "initial_pauli_error_probabilities": (
+            {"p_1q": float(P1_INITIAL), "p_2q": float(P2_INITIAL)}
+            if USE_AER_SIMULATOR and USE_INCREASING_RANDOM_PAULI else None
+        ),
+        "depth_scaling_model": (
+            'constant_seeded_pauli_from_linear' if USE_CONSTANT_SEEDED_RANDOM_PAULI
+            else 'exponential_capped' if USE_EXPONENTIAL_RANDOM_PAULI
+            else 'linear_capped' if active_increasing_types else None
+        ),
+        "bell_gate_noise_enabled": False,  # No Bell gates in circuit folding.
         # Kept for compatibility with earlier reports.
         "active_custom_noise_types": active_custom_types,
         "active_constant_noise_types": active_constant_types,
@@ -735,10 +820,38 @@ def _noise_report():
             "coherent_overrotation_epsilon": float(overrotation_epsilon),
         },
         "depth_dependent_noise_configuration": (
-            NOISE_CONTROLLER.runtime_report() if _INCREASING_NOISE_ACTIVE else None
+            NOISE_CONTROLLER.runtime_report()
+            if _INCREASING_NOISE_ACTIVE and not USE_CONSTANT_SEEDED_RANDOM_PAULI
+            else None
         ),
+        **({"constant_seeded_random_pauli_configuration": NOISE_CONTROLLER.runtime_report()}
+           if USE_CONSTANT_SEEDED_RANDOM_PAULI else {}),
         "fake_backend_name": str(FAKE_BACKEND_NAME) if USE_FAKE_BACKEND else None,
     }
+
+
+def _publish_report_without_overwrite(path: Path, report: dict) -> None:
+    """Write a complete JSON report atomically; never overwrite an existing file.
+
+    A GPU job may run for hours. If another process/sync writes the same target
+    after the scheduler's pre-launch skip check, the finished job MUST NOT
+    overwrite that result. POSIX hard-link publication fails with FileExistsError
+    when the target already exists. Crash leftovers have .tmp, never .json.
+    """
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=str(path.parent),
+            prefix=f".{path.name}.", suffix=".tmp", delete=False,
+        ) as handle:
+            temporary_path = Path(handle.name)
+            json.dump(report, handle, indent=2, sort_keys=False)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.link(temporary_path, path)  # Atomic O_EXCL-style publication, no replacement.
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
 
 
 def _write_report(method_name, expectations, raw_counts, transpiled_counts,
@@ -797,8 +910,7 @@ def _write_report(method_name, expectations, raw_counts, transpiled_counts,
         f"{execution_tag}_{method_name}.json"
     )
     path = output_directory / filename
-    with path.open("w", encoding="utf-8") as handle:
-        json.dump(report, handle, indent=2, sort_keys=False)
+    _publish_report_without_overwrite(path, report)
 
     return path, axis_report
 
