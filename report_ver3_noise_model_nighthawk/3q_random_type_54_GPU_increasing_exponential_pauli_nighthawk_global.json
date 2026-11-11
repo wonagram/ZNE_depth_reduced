@@ -1,0 +1,283 @@
+{
+  "schema_version": 4,
+  "method": "global",
+  "num_qubits": 3,
+  "unitary_type": "random_type",
+  "depth": 54,
+  "fold_factors": [
+    1,
+    3,
+    5,
+    7
+  ],
+  "expectation_values": [
+    0.024000000000000077,
+    0.018000000000000016,
+    0.024000000000000007,
+    0.052000000000000005
+  ],
+  "ideal_expectation": null,
+  "backend_mode": "aer_depth_dependent_noise",
+  "execution": {
+    "machine": "GPU",
+    "simulation_device": "GPU",
+    "gpu_enabled": true,
+    "backend_kind": "aer_simulator",
+    "backend_mode": "aer_depth_dependent_noise",
+    "backend_name": "AerSimulator",
+    "filename_tag": "GPU_increasing_exponential_pauli_nighthawk",
+    "noise_filename_tag": "increasing_exponential_pauli_nighthawk",
+    "shots": 1000,
+    "simulation_method": "automatic",
+    "noisy_statevector_trajectories": false,
+    "shot_branching_enable": false
+  },
+  "noise": {
+    "source": "depth_dependent_artificial_noise_channels",
+    "selected_custom_noise_family": "depth_dependent",
+    "custom_noise_channels_applied": true,
+    "hardware_inspired_noise_model": "nighthawk_r2",
+    "initial_pauli_error_probabilities": {
+      "p_1q": 0.0002114,
+      "p_2q": 0.00172
+    },
+    "depth_scaling_model": "exponential_capped",
+    "bell_gate_noise_enabled": false,
+    "active_custom_noise_types": [
+      "depth_dependent_random_pauli"
+    ],
+    "active_constant_noise_types": [],
+    "active_depth_dependent_noise_types": [
+      "depth_dependent_random_pauli"
+    ],
+    "constant_noise_parameters": {
+      "depolarizing_strength": 0.02,
+      "amplitude_damping_strength": 0.02,
+      "phase_damping_strength": 0.02,
+      "coherent_overrotation_epsilon": 0.02
+    },
+    "custom_noise_parameters": {
+      "depolarizing_strength": 0.02,
+      "amplitude_damping_strength": 0.02,
+      "phase_damping_strength": 0.02,
+      "coherent_overrotation_epsilon": 0.02
+    },
+    "depth_dependent_noise_configuration": {
+      "depth_definition": "Per-location structural depth on the gate's physical wires; disjoint blocks can remain parallel. Artificial noise channels, measurement, reset, and delay are excluded, and barriers synchronize without increasing depth.",
+      "base_seed": 150,
+      "scaling_formula": "s(D)=min(maximum_noise_multiplier**(D/cap_depth), maximum_noise_multiplier); cap_depth=reference_depth*(maximum_noise_multiplier-1)/(noise_multiplier-1)",
+      "reference_depth": 100.0,
+      "noise_multiplier": 3.0,
+      "maximum_noise_multiplier": 4.0,
+      "cap_depth": 150.0,
+      "initial_parameters": {
+        "p_1q": 0.0002114,
+        "p_2q": 0.00172,
+        "gamma_1q": 0.000112173,
+        "gamma_2q": 0.002113149
+      },
+      "increments_per_depth": null,
+      "parameters_at_depth_0": {
+        "p_1q": 0.0002114,
+        "p_2q": 0.00172,
+        "gamma_1q": 0.000112173,
+        "gamma_2q": 0.002113149
+      },
+      "parameters_at_reference_depth": {
+        "p_1q": 0.0005326946198955523,
+        "p_2q": 0.004334128411638364,
+        "gamma_1q": 0.0002826582478597152,
+        "gamma_2q": 0.005324801813328603
+      },
+      "maximum_parameters": {
+        "p_1q": 0.0008456,
+        "p_2q": 0.00688,
+        "gamma_1q": 0.000448692,
+        "gamma_2q": 0.008452596
+      },
+      "runtime": {
+        "max_original_gate_depth": 87,
+        "last_original_gate_depth": 52,
+        "random_pauli_1q_channels": 576,
+        "random_pauli_2q_channels": 576,
+        "increasing_amplitude_1q_channels": 0,
+        "increasing_amplitude_2q_gate_locations": 0,
+        "last_depth_dependent_parameters": {
+          "p_1q": 0.00034183703533318966,
+          "p_2q": 0.0027812663234299253,
+          "gamma_1q": 0.00018138545773145642,
+          "gamma_2q": 0.0034169942733079206
+        }
+      },
+      "scaling_model": "exponential_capped",
+      "bell_gate_noise_enabled": false,
+      "bell_noise_policy": "H: 1q; CX: 2q; parallel Z on first + X on second: one noise LAYER with one 1q channel per qubit; measurement basis CX: 2q, H: 1q; not the classical measurement, conditional corrections or resets.",
+      "bell_noise_channel_counts": {
+        "preparation_1q_channels": 0,
+        "preparation_2q_channels": 0,
+        "measurement_1q_channels": 0,
+        "measurement_2q_channels": 0
+      },
+      "bell_noise_unitary_depths": {
+        "preparation": [],
+        "measurement": []
+      }
+    },
+    "fake_backend_name": null,
+    "fake_statevector_trajectory_sampling": false,
+    "shot_branching_enable": false
+  },
+  "weights": {
+    "w1_one_qubit": 0.3,
+    "w2_two_qubit": 0.7
+  },
+  "gate_count_definition": "Structural gate count. Measurements, resets, barriers, delays, Aer save/set instructions, and explicit artificial-noise-channel instructions are excluded. Control-flow blocks are counted recursively.",
+  "gate_counts": {
+    "before_transpilation": {
+      "N_1q": [
+        42,
+        200,
+        358,
+        516
+      ],
+      "N_2q": [
+        38,
+        116,
+        194,
+        272
+      ],
+      "N_weighted": [
+        39.199999999999996,
+        141.2,
+        243.2,
+        345.19999999999993
+      ]
+    },
+    "after_transpilation": {
+      "N_1q": [
+        42,
+        200,
+        358,
+        516
+      ],
+      "N_2q": [
+        38,
+        116,
+        194,
+        272
+      ],
+      "N_weighted": [
+        39.199999999999996,
+        141.2,
+        243.2,
+        345.19999999999993
+      ]
+    }
+  },
+  "cases": {
+    "before_weighted": {
+      "case": "before_transpilation_weighted",
+      "N_definition": "N = 0.3*N_1q + 0.7*N_2q",
+      "N": [
+        39.199999999999996,
+        141.2,
+        243.2,
+        345.19999999999993
+      ],
+      "linear": {
+        "success": true,
+        "model": "a*N + b",
+        "slope": 8.823529411764686e-05,
+        "intercept": 0.012541176470588293,
+        "at_N_zero": 0.012541176470588293,
+        "rmse": 0.00857321409974114
+      },
+      "exponential": {
+        "success": true,
+        "model": "A*exp(-g*N)",
+        "amplitude": 0.012414348481715534,
+        "decay_rate": -0.003907672348110489,
+        "at_N_zero": 0.012414348481715534,
+        "rmse": 0.00683005247485065
+      }
+    },
+    "before_two_qubit": {
+      "case": "before_transpilation_two_qubit",
+      "N_definition": "N = N_2q",
+      "N": [
+        38.0,
+        116.0,
+        194.0,
+        272.0
+      ],
+      "linear": {
+        "success": true,
+        "model": "a*N + b",
+        "slope": 0.000115384615384615,
+        "intercept": 0.011615384615384711,
+        "at_N_zero": 0.011615384615384711,
+        "rmse": 0.008573214099741135
+      },
+      "exponential": {
+        "success": true,
+        "model": "A*exp(-g*N)",
+        "amplitude": 0.011915642244738003,
+        "decay_rate": -0.005110035000515921,
+        "at_N_zero": 0.011915642244738003,
+        "rmse": 0.006830052474790486
+      }
+    },
+    "after_weighted": {
+      "case": "after_transpilation_weighted",
+      "N_definition": "N = 0.3*N_1q + 0.7*N_2q",
+      "N": [
+        39.199999999999996,
+        141.2,
+        243.2,
+        345.19999999999993
+      ],
+      "linear": {
+        "success": true,
+        "model": "a*N + b",
+        "slope": 8.823529411764686e-05,
+        "intercept": 0.012541176470588293,
+        "at_N_zero": 0.012541176470588293,
+        "rmse": 0.00857321409974114
+      },
+      "exponential": {
+        "success": true,
+        "model": "A*exp(-g*N)",
+        "amplitude": 0.012414348481715534,
+        "decay_rate": -0.003907672348110489,
+        "at_N_zero": 0.012414348481715534,
+        "rmse": 0.00683005247485065
+      }
+    },
+    "after_two_qubit": {
+      "case": "after_transpilation_two_qubit",
+      "N_definition": "N = N_2q",
+      "N": [
+        38.0,
+        116.0,
+        194.0,
+        272.0
+      ],
+      "linear": {
+        "success": true,
+        "model": "a*N + b",
+        "slope": 0.000115384615384615,
+        "intercept": 0.011615384615384711,
+        "at_N_zero": 0.011615384615384711,
+        "rmse": 0.008573214099741135
+      },
+      "exponential": {
+        "success": true,
+        "model": "A*exp(-g*N)",
+        "amplitude": 0.011915642244738003,
+        "decay_rate": -0.005110035000515921,
+        "at_N_zero": 0.011915642244738003,
+        "rmse": 0.006830052474790486
+      }
+    }
+  }
+}
